@@ -1,0 +1,22 @@
+# dsh-plugin-cli-hub Cordis patch 层
+# 安装到 DSH profile 时被框架自动 apply；等效于把 cli-hub.core
+# 这一行插入 profile 的 bundle 组合树顶层。
+- insert:
+    - id: cli-hub.core
+      # Node 可解析的包名（必须和 package.json 的 name 一致）
+      name: dsh-plugin-cli-hub
+      config:
+        scan:
+          defaultDepth: l3
+          autoRefreshIntervalSec: 1800
+          timeoutPerCmd: 3000
+          showUnknown: true
+        quota:
+          cacheTtlSec: 300
+          defaultWarningThresholdPercent: 10
+        gateway:
+          failureCooldownCount: 5
+          failureCooldownSec: 30
+          sandboxLevel: strict
+        agent:
+          singletonPerAdapter: true

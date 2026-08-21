@@ -1,0 +1,20 @@
+# dsh-plugin-cli-hub bundle 定义（已废弃，保留向后兼容）
+# 推荐通过 package.json 的 dsh.bundle.patch → cordis.patch.yml 机制加载。
+rows:
+  - id: cli-hub.core
+    use: dsh-plugin-cli-hub
+    config:
+      scan:
+        defaultDepth: l3
+        autoRefreshIntervalSec: 1800
+        timeoutPerCmd: 3000
+        showUnknown: true
+      quota:
+        cacheTtlSec: 300
+        defaultWarningThresholdPercent: 10
+      gateway:
+        failureCooldownCount: 5
+        failureCooldownSec: 30
+        sandboxLevel: strict
+      agent:
+        singletonPerAdapter: true

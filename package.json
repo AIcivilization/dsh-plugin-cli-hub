@@ -1,0 +1,87 @@
+{
+  "name": "dsh-plugin-cli-hub",
+  "version": "0.1.0-rc.1",
+  "description": "DeepSeek Harness plugin: auto-discover local AI CLI tools, reuse their subscribed quota as Tool & Agent providers.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./bundle/index.yml": "./bundle/index.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "!dist/tests/**",
+    "bundle",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "cordis",
+    "cli",
+    "agent",
+    "quota",
+    "multi-agent"
+  ],
+  "author": "dsh-plugin-cli-hub contributors",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.18"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "emit-types": "echo '(handled by build)'",
+    "dev": "tsdown src/index.ts --format esm,cjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src tests",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "pnpm build"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.0-rc.8 || >=4.0.0",
+    "@deepseek-ai/dsh": ">=0.1.0-rc.8",
+    "cordis": "^4.0.0-rc.8 || >=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "cordis": "^4.0.0-rc.8",
+    "cosmokit": "^1.8.1",
+    "json-schema-to-ts": "^3.1.1",
+    "minimatch": "^10.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "esbuild": "^0.28.2",
+    "oxlint": "^0.9.0",
+    "tsdown": "^0.4.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
