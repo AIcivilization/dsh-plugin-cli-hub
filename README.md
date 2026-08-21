@@ -6,6 +6,8 @@
 - 主入口：`dist/index.cjs` / `dist/index.js`
 - 包名：`dsh-plugin-cli-hub`
 - License：MIT
+- 内置 adapter 数量：**33 个**（覆盖主流商业 CLI + 开源 CLI + 本地模型 CLI）
+- 本机实测命中：**20+ 个**（取决于用户实际安装情况）
 
 ---
 
@@ -20,17 +22,18 @@
 - [配置说明](#配置说明)
 - [开发指南](#开发指南)
 - [常见问题](#常见问题)
+- [Roadmap](#roadmap)
 - [License](#license)
 
 ---
 
 ## 特性
 
-- **自动扫描本机 AI CLI**：三层扫描（L1 文件名 / L2 版本号 / L3 登录态），无需手写配置；首次启动 20ms 出结果，后台 30 分钟刷新一次。
-- **Tool 模式复用订阅额度**：把已发现且已认证的 CLI 命令注册成 DSH `ctx.tools` 工具，由 DSH Agent 在对话中按自然语言触发，模板渲染 + 严格沙箱执行（`execFile` 语义，不经 shell）。
-- **Agent 模式长期子进程**：把 CLI 作为 `spawn` 出来的长期子 Agent 复用订阅额度，支持 `stdio-jsonrpc` / `stream-json` / `line-based` / `mcp-stdio` 多协议；DSH 退出时三阶段 graceful shutdown（SIGINT → grace → SIGTERM → SIGKILL）杜绝孤儿进程。
+- **自动扫描本机 AI CLI**：三层扫描（L1 文件名 / L2 版本号 / L3 登录态），覆盖 `$PATH` / 用户家目录 bin / macOS App bundle / npm global / Python 用户脚本 6 类来源；首次启动 20ms 出结果，后台 30 分钟刷新一次。
+- **33 个内置 adapter**：开箱即用覆盖 Anthropic Claude Code、OpenAI Codex、Google Gemini CLI、GitHub Copilot、Cognition Devin、ByteDance Trae、xAI Grok、Moonshot Kimi、阿里 Qwen、Ollama、LiteLLM、Aider、Cline、Continue、Cursor、Windsurf、OpenCode、Goose、Junie、AIChat、tgpt、Hermes、PaperclipAI、FreeBuff、Soul5、CatpawAI、smol、OpenClaudia、llm、gptme、chatblade、Snow CLI、OfficeCLI。
+- **Tool 模式复用订阅额度**：把已发现且已认证的 CLI 命令注册成 DSH `ctx.tools` 工具，由 DSH Agent 在对话中按自然语言触发；模板渲染 + 严格沙箱执行（`execFile` 语义，不经 shell）。
+- **Agent 模式长期子进程**：把 CLI 作为 `spawn` 出来的长期子 Agent 复用订阅额度，支持 `stdio-jsonrpc` / `stream-json` / `line-based` / `mcp-stdio` / `acp` 多协议；DSH 退出时三阶段 graceful shutdown（SIGINT → grace → SIGTERM → SIGKILL）杜绝孤儿进程。
 - **额度监控**：支持 `command` / `http` / `file` / `unknown` 四种 provider 查询方式 + 本地估算累计 + TTL 缓存 + 阈值告警（剩 10% 触发 `quota-warning`，归零触发 `quota-depleted`）。
-- **21+ adapter 设计容量**：内置 4 款开箱即用（claude-code / snow-cli / kimi-cli / officecli），剩余 17 款（codex、gemini-cli、aider、cline、continue、opencode、goose、cursor-cli、junie、windsurf、aichat、tgpt、ollama、litellm、grok、qwen、trae）走 `defineCliAdapter(...)` 自定义扩展路径。
 - **交互式 Web UI**：DSH 设置页卡片、独立 `/cli-hub` 路由页、`/cli-hub/api/*` REST 端点三路并存；Dashboard 汇总 + Adapter 列表/详情 + 额度监控 + 工具列表 + Agent 会话表，全部可点按钮触发后端动作。
 - **DSH CLI 子命令**：`dsh cli-hub scan|list|enable|disable|quota|tool exec|agent spawn|list|status|stop|send`，可在终端调试。
 - **平台健壮性**：自动补全 macOS launchd 后台进程被重置的 PATH（详见 [常见问题](#常见问题)），所有 `ctx.*` 读取走 `safeGet` 多路径兜底，DSH/Cordis rc 版本兼容。
@@ -52,10 +55,10 @@
 dsh plugin --profile web add dsh-plugin-cli-hub
 
 # 方法 B：本地开发路径链接
-dsh plugin --profile web add file:///Users/wf/自进化/临时/dsh-cli
+dsh plugin --profile web add file:///path/to/dsh-cli
 
 # 方法 C：手动脚本（最稳，等价于 B，自动 build + 写 bundles + 重启 DSH）
-bash /Users/wf/自进化/临时/dsh-cli/scripts/install-to-dsh-web.sh
+bash /path/to/dsh-cli/scripts/install-to-dsh-web.sh
 ```
 
 ### 2) 重启 DSH
@@ -71,7 +74,7 @@ nohup dsh web > /tmp/dsh-web.log 2>&1 &
 ```bash
 # 看日志
 grep -E 'cli-hub|loaded' /tmp/dsh-web.log | head -20
-# 期望：[cli-hub] loaded. adapter count=4 / initial L1 scan done. items=...
+# 期望：[cli-hub] loaded. adapter count=33 / initial L1 scan done. items=...
 
 # 浏览器打开
 open http://127.0.0.1:3080/
@@ -92,43 +95,115 @@ DSH Agent 会自动调用 `ctx.cliHub.scan('l3')` → 返回扫描表。
 
 DSH 会自动触发 `cli-hub:claude-code:run-task` 工具，复用本机 Claude 订阅执行。
 
+### 5) 在 DSH 之外独立查看额度
+
+仓库自带 `scripts/show-quota.mjs`，可在不依赖 DSH 的情况下扫描本机并打印额度表：
+
+```bash
+node scripts/show-quota.mjs
+```
+
+输出示例（彩色 + 表格 + 详情）：
+
+```
+[1/3] 装配插件: dsh-plugin-cli-hub
+   ✓ 插件装配完成
+
+[2/3] 扫描本机 AI CLI（L3 深度）
+   扫描完成：共发现 20 个 AI CLI
+
+[3/3] 查询额度状态
+
+  Adapter           Version         Auth            Currency   Used   Total   Source
+  ─────────────────────────────────────────────────────────────────────────────
+  ollama            0.32.15         authenticated   credits    0      ∞       estimate
+  claude-code       2.1.235         authenticated   credits    0      ∞       estimate
+  gemini-cli        0.55.1          authenticated   credits    0      ∞       estimate
+  copilot           1.0.80          authenticated   credits    0      ∞       estimate
+  windsurf          1.126.0         authenticated   credits    0      ∞       estimate
+  catpawai          1.101.0         authenticated   credits    0      ∞       estimate
+  devin-desktop     -               authenticated   credits    0      ∞       estimate
+  ...
+```
+
 ---
 
 ## 支持的 AI CLI
 
-内置 adapter（开箱即用，定义在 `src/adapters/builtin/`）：
+### 内置 adapter 全表（33 个）
+
+所有 adapter 定义在 [src/adapters/builtin/](file:///Users/wf/自进化/临时/dsh-cli/src/adapters/builtin/)，按类别分组：
+
+#### A. 商业云端 CLI（10 个）
 
 | 名称 | adapter id | vendor | 命令 | Tool 模式 | Agent 模式 |
 |---|---|---|---|---|---|
-| Claude Code | `claude-code` | Anthropic | `claude` | 任意任务 (`run-task`) | stream-json (首批) |
-| Snow CLI | `snow-cli` | Snowflake AI | `snow` | 画图 / 翻译 / TTS / ASR | line-based REPL |
-| Kimi CLI | `kimi-cli` | Moonshot AI | `kimi` | 联网搜索 + 长文档阅读 | stdio-jsonrpc (占位) |
-| OfficeCLI | `officecli` | iOfficeAI | `officecli` | 生成 PPT / DOCX / XLSX | (纯 Tool) |
+| Claude Code | `claude-code` | Anthropic | `claude` / `claude-cli` / `claude-agent` | 任意任务 (`run-task`) | **stream-json (已接入)** |
+| Codex CLI | `codex` | OpenAI | `codex` / `codex-cli` / `codex-code-mode-host` | `run-task` | (规划中) |
+| Gemini CLI | `gemini-cli` | Google | `gemini` / `gemini-cli-v2` | `run-task` | (规划中) |
+| GitHub Copilot CLI | `copilot` | GitHub | `copilot` / `gh-copilot` | `suggest` + `explain` | (纯 Tool) |
+| Kimi CLI | `kimi-cli` | Moonshot AI | `kimi` / `kimi-cli` | 联网搜索 + 长文档阅读 | stdio-jsonrpc (占位) |
+| Snow CLI | `snow-cli` | Snowflake AI | `snow` / `snowflake` | 画图 / 翻译 / TTS / ASR | **line-based REPL (已接入)** |
+| Grok CLI | `grok` | xAI | `grok` / `grok-cli` / `grok-agent` | `chat` | (规划中) |
+| Qwen CLI | `qwen` | Alibaba | `qwen` / `qwen-cli` | `chat` + `run-task` | (规划中) |
+| Trae CLI | `trae` | ByteDance | `trae` / `trae-cli` / `trae-agent` / `ctx-cli` | `run-task` | (规划中) |
+| Devin Desktop | `devin-desktop` | Cognition AI | `devin-desktop` / `devin` | `run-task` | (规划中) |
 
-社区/计划支持的 adapter（通过 `defineCliAdapter(...)` 自定义即可接入，指纹需按各 CLI 实际命令补全）：
+#### B. IDE 内嵌 CLI（6 个）
 
-| 名称 | 建议命令 | vendor | 能力备注 |
+| 名称 | adapter id | vendor | 命令 |
 |---|---|---|---|
-| Codex | `codex` | OpenAI | 代码补全/Agent |
-| Gemini CLI | `gemini` | Google | 多模态 |
-| Aider | `aider` | open source | pair-programming |
-| Cline | `cline` | open source | IDE Agent |
-| Continue | `continue` | Continue Dev | IDE 补全 |
-| OpenCode | `opencode` | open source | terminal Agent |
-| Goose | `goose` | Block | MCP Agent |
-| Cursor CLI | `cursor-cli` | Cursor | 代码 Agent |
-| Junie | `junie` | JetBrains | IDE Agent |
-| Windsurf | `windsurf` | Codeium | IDE Agent |
-| AIChat | `aichat` | open source | 多 provider 终端 |
-| tgpt | `tgpt` | open source | 终端 LLM |
-| Ollama | `ollama` | Ollama | 本地模型 |
-| LiteLLM | `litellm` | BerriAI | 代理网关 |
-| Grok CLI | `grok` | xAI | 推理 |
-| Qwen CLI | `qwen` | Alibaba | 通义千问 |
-| Trae | `trae` | ByteDance | Trae CLI |
-| Snow (legacy) | `snow-cli` | (见内置) | (见内置) |
+| Cursor CLI | `cursor-cli` | Cursor | `cursor` / `cursor-cli` / `cursor-agent` |
+| Windsurf | `windsurf` | Codeium | `windsurf` / `windsurf-cli` / `devin-desktop` |
+| Cline | `cline` | open source | `cline` |
+| Continue | `continue` | Continue Dev | `continue` / `continuedev` |
+| Junie | `junie` | JetBrains | `junie` |
+| OpenCode | `opencode` | open source | `opencode` / `opencode-cli` / `opencode-agent` |
 
-完整清单及 21+ 总数 = 4 内置 + 17 社区/计划。
+#### C. 本地模型 / 网关 CLI（5 个）
+
+| 名称 | adapter id | vendor | 命令 | 备注 |
+|---|---|---|---|---|
+| Ollama | `ollama` | Ollama | `ollama` / `ollama-cli` | 本地推理 |
+| LiteLLM | `litellm` | BerriAI | `litellm` | 多 provider 代理网关 |
+| AIChat | `aichat` | open source | `aichat` | 多 provider 终端 |
+| tgpt | `tgpt` | open source | `tgpt` | 终端 LLM |
+| Hermes CLI | `hermes` | NousResearch | `hermes` / `hermes-acp` / `hermes-cli` | Nous Hermes 系列 |
+
+#### D. 开源 AI Agent CLI（8 个）
+
+| 名称 | adapter id | vendor | 命令 |
+|---|---|---|---|
+| Aider | `aider` | open source | `aider` |
+| Goose | `goose` | Block | `goose` |
+| PaperclipAI | `paperclipai` | PaperclipAI | `paperclipai` / `paperclip` |
+| FreeBuff | `freebuff` | FreeBuff | `freebuff` / `freebuff-cli` |
+| Soul5 | `soul5` | Soul5 | `soul5` / `soul5-cli` |
+| CatpawAI | `catpawai` | CatpawAI | `catpawai` / `catpaw` |
+| smol Developer | `smol` | smol-ai | `smol` / `smol-developer` |
+| OpenClaudia | `openclaudia` | OpenClaudia | `openclaudia` / `openclaudia-cli` |
+
+#### E. 通用 LLM CLI（4 个）
+
+| 名称 | adapter id | vendor | 命令 | 备注 |
+|---|---|---|---|---|
+| llm CLI | `llm` | Simon Willison | `llm` | 多后端路由 |
+| gptme | `gptme` | Erik Bjäreholt | `gptme` | 终端助手 + 工具调用 |
+| chatblade | `chatblade` | open source | `chatblade` | prompt 模板 + 管道 |
+| OfficeCLI | `officecli` | iOfficeAI | `officecli` / `office-cli` | 生成 PPT / DOCX / XLSX |
+
+### 扫描能力
+
+Scanner 会主动探测 6 类来源，无需用户配置 PATH：
+
+| 来源类型 | 扫描目录示例 | 命中场景 |
+|---|---|---|
+| `$PATH` 中的目录 | `/usr/local/bin`, `/opt/homebrew/bin`, ... | 系统级安装 |
+| 用户家目录 bin | `~/.local/bin`, `~/.bun/bin`, `~/.cargo/bin`, `~/go/bin`, `~/.local/share/pnpm`, `~/.codeium/windsurf/bin`, `~/.catpawai/bin`, `~/.grok/bin`, `~/.opencode/bin`, ... | 用户级安装 + IDE 内嵌 |
+| macOS App bundle | `/Applications/*.app/Contents/MacOS`, `/Applications/*.app/Contents/Resources/app/bin`, `.../modules/ai-agent/bin` | App 形式安装（Devin/Claude/Gemini/OpenCode/Ollama 等） |
+| macOS 包管理器 | `/usr/local/bin`, `/opt/homebrew/bin`, `/opt/local/bin`, ... | Homebrew / MacPorts |
+| npm global | `{prefix}/bin` + `lib/node_modules/{pkg}/bin` 解析 | `npm i -g` 安装的包，bin 名和包名不一致时也能扫到（如 `@anthropic-ai/claude-code` → `claude`） |
+| Python 用户脚本 | `~/Library/Python/{ver}/bin` | `pip install --user` 装的 CLI |
 
 ### 自定义一个 Adapter
 
@@ -202,28 +277,37 @@ ctx.cliHub
 
 ### Scanner（L1/L2/L3 三层扫描）
 
-定义在 `src/core/scanner.ts`。
+定义在 [src/core/scanner.ts](file:///Users/wf/自进化/临时/dsh-cli/src/core/scanner.ts)。
 
 | 层级 | 耗时 | 行为 |
 |---|---|---|
-| **L1** | ~20ms | 枚举 `$PATH` 下的可执行文件名，按 `fingerprint.commandNames` 做大小写不敏感 match；不启动任何子进程。 |
+| **L1** | ~20ms | 枚举 `_collectScanDirs()` 收集到的所有目录下的可执行文件名，按 `fingerprint.commandNames` 做大小写不敏感 match；不启动任何子进程。 |
 | **L2** | ~200ms/命中 | 对 L1 命中的每个候选执行 `cmd --version`，用 `versionPattern` 正则解析版本号。 |
 | **L3** | ~300ms/命中 | 探测登录态：先查 `envVars`，再查 `configPaths`（弱证据），最后跑 `authCheck.cmd` 并匹配 stdout。 |
+
+`_collectScanDirs()` 整合 6 类扫描源：
+
+1. `$PATH` 中的目录
+2. 用户家目录下的常用 bin：`~/.local/bin`、`~/.bun/bin`、`~/.cargo/bin`、`~/go/bin`、`~/.local/share/pnpm`、`~/.codeium/windsurf/bin`、`~/.catpawai/bin`、`~/.grok/bin`、`~/.opencode/bin` 等
+3. macOS App bundle 内嵌 CLI：`/Applications/{App}.app/Contents/MacOS`、`/Applications/{App}.app/Contents/Resources/bin`、`/Applications/{App}.app/Contents/Resources/app/modules/ai-agent/bin`
+4. macOS 包管理器：`/usr/local/bin`、`/opt/homebrew/bin`、`/opt/local/bin`
+5. npm global bin：`{prefix}/bin` + `lib/node_modules/{pkg}/bin` 解析
+6. Python 用户脚本：`~/Library/Python/{ver}/bin`
 
 扫描过程发事件：`scan-started` / `cli-detected` / `scan-progress` / `scan-done`，转发为 DSH 事件 `cli-hub/cli-detected` / `cli-hub/scan-progress`，支持 `watchScan()` 流式消费。
 
 ### Registry
 
-定义在 `src/core/registry.ts`，纯内存对象，零副作用。
+定义在 [src/core/registry.ts](file:///Users/wf/自进化/临时/dsh-cli/src/core/registry.ts)，纯内存对象，零副作用。
 
 - `register(def)` / `unregister(id)`：注册时做轻量校验（id 格式 / name / description / fingerprint / capabilities 必填项）。
 - `get(id)` / `listAdapters({ onlyEnabled?, mode?, keyword? })`：查询。
 - `setEnabled(id, enabled)` / `isEnabled(id)`：启停；触发 `adapter-enabled-changed` 事件。
-- 启动时 `loadBuiltinAdapters(registry)` 加载内置 4 款。
+- 启动时 `loadBuiltinAdapters(registry)` 加载全部 33 个内置 adapter。
 
 ### QuotaManager
 
-定义在 `src/core/quota.ts`。
+定义在 [src/core/quota.ts](file:///Users/wf/自进化/临时/dsh-cli/src/core/quota.ts)。
 
 - 4 种 `method`：`command`（执行子命令拿 JSON / 文本）、`http`（带可选 `authHeader` 拉远端接口）、`file`（读本地凭证文件）、`unknown`（仅估算）。
 - 缓存 TTL = `max(quota.refreshIntervalSec, config.cacheTtlSec)`，去重并发请求（同一 adapterId 在 inflight Promise 期间复用）。
@@ -232,7 +316,7 @@ ctx.cliHub
 
 ### ToolGateway
 
-定义在 `src/core/gateway-tool.ts`，负责把已发现且已启用的 adapter 注册成 DSH `ctx.tools` 工具。
+定义在 [src/core/gateway-tool.ts](file:///Users/wf/自进化/临时/dsh-cli/src/core/gateway-tool.ts)，负责把已发现且已启用的 adapter 注册成 DSH `ctx.tools` 工具。
 
 - `syncRegistrations(scanItems)`：扫描完成后调用，按 adapter 能力声明动态注册 / 注销。
 - 每次调用走三阶段：pre-execute（adapter.enabled 检查 + 额度预扣 + 冷却判断）→ execute（模板渲染 + `execFile` 严格沙箱执行）→ post-execute（额度记录 + 历史落盘 + 事件）。
@@ -243,7 +327,7 @@ ctx.cliHub
 
 ### AgentGateway
 
-定义在 `src/core/gateway-agent.ts`，长生命周期子进程管理 + 协议适配。
+定义在 [src/core/gateway-agent.ts](file:///Users/wf/自进化/临时/dsh-cli/src/core/gateway-agent.ts)，长生命周期子进程管理 + 协议适配。
 
 - `spawn(adapterId, opts)`：启动子进程，按 adapter 级别单例（`singletonPerAdapter: true`）默认复用；返回 `AgentSession`。
 - `AgentSession` 协议统一 API：
@@ -330,13 +414,13 @@ Web UI 三条挂载路径（按顺序尝试，至少一条必生效）：
 - DSH 设置页 → 滚到「CLI Hub」卡片
 - 或浏览器直接访问 `http://127.0.0.1:3080/cli-hub`
 
-### 页面分区
+### 页面分区（6 个 section）
 
 | 区块 | 说明 | 头部动作 |
 |---|---|---|
 | 概览 (Dashboard) | 扫描时间 / 总数 / 已匹配 / 已启用 / 已认证 / 会话数 | 快速扫描(L1) / 刷新全部额度 |
 | 已发现的 AI CLI | 扫描结果表：命令 / 路径 / 版本 / 登录态 / 能力标签 | toggle-adapter / show-install-hint |
-| Adapter 开关（全部内置） | 所有注册的 adapter，含未发现的 | toggle-adapter / show-install-hint / adapter-detail |
+| Adapter 开关（全部内置） | 所有注册的 adapter（含未发现的），共 33 个 | toggle-adapter / show-install-hint / adapter-detail |
 | 额度监控 | 每个 adapter 的 used / total / remaining / percent / warning | quota-refresh |
 | 可用工具 | 已发现且已认证 adapter 的工具列表（含 inputSchema） | tool-exec |
 | Agent 会话 | 当前活着的子进程：sessionId / pid / 状态 / 时长 / 协议 | agent-send / agent-stop |
@@ -415,7 +499,7 @@ pnpm install
 
 ### 构建产物
 
-构建采用 **tsc 生成 `.d.ts` + esbuild bundle ESM/CJS** 的两步流程（详见 `scripts/build.mjs`，原本用 tsdown 但 rolldown 在处理 MemberExpression 嵌套时崩溃，故改用 esbuild）：
+构建采用 **tsc 生成 `.d.ts` + esbuild bundle ESM/CJS** 的两步流程（详见 [scripts/build.mjs](file:///Users/wf/自进化/临时/dsh-cli/scripts/build.mjs)，原本用 tsdown 但 rolldown 在处理 MemberExpression 嵌套时崩溃，故改用 esbuild）：
 
 ```bash
 pnpm build
@@ -437,14 +521,14 @@ pnpm test:watch   # 监听模式
 ### 端到端冒烟（不写入 `~/.dsh`）
 
 ```bash
+# 综合冒烟：apply() 挂载 ctx.cliHub / Scanner 真 L3 扫本机 PATH / AgentGateway spawn+ready+send+recv+shutdown / Web UI 6 个 section
 node scripts/e2e-smoke.mjs
-# 覆盖：apply() 挂载 ctx.cliHub / Scanner 真 L3 扫本机 PATH / AgentGateway spawn+ready+send+recv+shutdown
-```
 
-Claude Agent 专项冒烟：
-
-```bash
+# Claude Code Agent 真实协议冒烟（需要本机已登录 claude）
 node scripts/smoke-claude-agent.mjs
+
+# 本机 AI CLI 额度概览（彩色表格 + 详情）
+node scripts/show-quota.mjs
 ```
 
 ### 部署到 DSH web profile
@@ -487,6 +571,13 @@ node -e "import('dsh-plugin-cli-hub').then(async m => {
 });"
 ```
 
+### 添加新的内置 adapter
+
+1. 在 `src/adapters/builtin/` 下新建 `{id}.ts`，参考 [codex.ts](file:///Users/wf/自进化/临时/dsh-cli/src/adapters/builtin/codex.ts) 模板
+2. 在 [src/adapters/builtin/index.ts](file:///Users/wf/自进化/临时/dsh-cli/src/adapters/builtin/index.ts) 的 `BUILTIN_ADAPTERS` 数组里加上 import 和引用
+3. 跑 `pnpm typecheck && pnpm test` 验证
+4. `node scripts/show-quota.mjs` 看本机是否能扫到
+
 ---
 
 ## 常见问题
@@ -497,16 +588,12 @@ node -e "import('dsh-plugin-cli-hub').then(async m => {
 
 **原因**：`launchd` 启动的 GUI/后台进程不会读 `~/.zshrc` / `~/.bash_profile`，PATH 退化为系统默认。
 
-**本插件的解决方案**（已内置，无需用户操作）：`Scanner._listPathEntries()` 和 `_safeExecNative()` 都会主动补全以下目录到 `PATH` 前面：
+**本插件的解决方案**（已内置，无需用户操作）：
 
-```
-~/.local/bin
-/usr/local/bin
-/opt/homebrew/bin
-/opt/homebrew/sbin
-```
+- `Scanner._collectScanDirs()` 主动收集 6 类扫描源（`$PATH` / 用户家目录 bin / macOS App bundle / macOS 包管理器 / npm global / Python 用户脚本）。
+- `Scanner._withExtendedPath()` 给 `_safeExec` / `_safeExecNative` 的子进程注入完整 PATH。
 
-**如果还是扫不到**（比如你装在 `~/Library/Application Support/some-cli/bin`），手动解决：
+如果装在非常规路径下还是扫不到，手动解决：
 
 ```bash
 # 方式 A：在 DSH profile 的启动脚本里显式 export PATH
@@ -564,14 +651,14 @@ node -e "import('js-yaml').then(m => console.log(typeof m.default.load(require('
 
 **现象**：日志出现 `cannot get property "storage" without inject` / `cannot get property "tools" without inject`。
 
-**原因**：Cordis v4 的 ctx proxy trap 规则——如果 fiber 被 loader 加载（`fiber.runtime` 存在），那么读 `ctx.<name>` 时，`<name>` 必须在 `fiber.inject` 数组里，否则直接抛错。
+**原因**：Cordis v4 的 ctx proxy trap 规则——如果 fiber 被 loader 加载（`fiber.runtime` 存在），那么读 `ctx.<name>` 时，`<name>` 必须在 `fiber.inject` 数组里，否则直接抛错。`safeGet` 的 `reflect.get(name, false)` bypass 仅在 root fiber 生效，子 fiber 中仍会被拦截。
 
 **本插件的解决方案**：
 
 - 主插件 `inject = ['webServer']`（唯一强依赖，必须等 webServer 就绪才激活）
 - 其他 service（`storage` / `settings` / `tools` / `logger` / `subprocess`）全部走 `safeGet()` 多路径兜底：`raw/internal` → `service` → `ctx.get(name, false)` → `ctx.reflect.get(name, false)` → `fiber.runtime.services` map → 裸读。
 
-如果你写自定义 sub-plugin 时也遇到，复制 `src/core/safe-get.ts` 或 `src/index.ts` 里的 `safeGet` 实现即可。
+如果你写自定义 sub-plugin 时也遇到，复制 [src/core/safe-get.ts](file:///Users/wf/自进化/临时/dsh-cli/src/core/safe-get.ts) 或 [src/index.ts](file:///Users/wf/自进化/临时/dsh-cli/src/index.ts) 里的 `safeGet` 实现即可。
 
 ### 4. 安装后日志报 `[cli-hub] initial scan error: ...`？
 
@@ -605,20 +692,63 @@ dsh cli-hub agent status claude-code --tail 20
                 readyPattern: '"subtype":"hook_started"'   # 新的 prompt 前缀
 ```
 
+**Claude Code 实战要点**（已在 v0.1.0-rc.1 验证）：
+
+- 协议必须用 `stream-json`，不能用 `stdio-jsonrpc`，否则会通信错乱
+- CLI flags：`-p --output-format stream-json --input-format stream-json --verbose --add-dir <workspace>`
+- `readyPattern` 必须设为 `subtype=hook_started`，不能用 banner 行（会初始化死锁）
+
 ### 6. 额度估算不准？
 
 - Provider 实时查询（HTTP / command / file）优先；没有实时查询时才走 `estimatePerToolCall` / `estimatePerAgentTurn` 累计估算。
 - 想更精确：在 Adapter 里提供更精确的 `creditsPerToken` / `creditsPerSecond`，或实现自定义 `estimatePerToolCall` 函数。
+- 当前 33 个 adapter 中只有 `claude-code` / `snow-cli` / `kimi-cli` / `officecli` 4 个实现了 provider 查询，其余走 `unknown` 估算路径。
 
 ### 7. 插件能不能在 DSH 之外单独跑？
 
-可以。见 [开发指南 - 在 DSH 之外独立运行](#在-dsh-之外独立运行)。
+可以。见 [开发指南 - 在 DSH 之外独立运行](#在-dsh-之外独立运行)。`scripts/show-quota.mjs` 就是独立运行的示例。
 
 ### 8. 权限和安全？
 
 - Tool 模式默认 `sandboxLevel=strict`：命令走 `execFile(cmd, [args])`，**不经过 shell**，所以没有 `$()` / `&&` / `|` 注入风险。
 - Agent 模式子进程继承当前用户权限，建议在工作区子目录下 spawn（AgentGateway 会自动 `mkdir`）。
 - `gateway.failureCooldownCount` 连错保护：连续 N 次失败自动冷却，防止打爆订阅额度。
+
+### 9. 为什么扫到的 CLI 比内置 adapter 少？
+
+33 个是「设计容量」，本机实际扫到的数量取决于用户安装情况。最常见能扫到 10-20 个。可以运行 `node scripts/show-quota.mjs` 看本机实际命中。
+
+如果某 CLI 本机已装但扫不到，按以下顺序排查：
+
+1. `which {cmd}` 看是否在 PATH 上
+2. 检查 [src/adapters/builtin/{id}.ts](file:///Users/wf/自进化/临时/dsh-cli/src/adapters/builtin) 的 `fingerprint.commandNames` 是否包含你装的命令名
+3. 跑 `node scripts/e2e-smoke.mjs` 看扫描日志
+
+---
+
+## Roadmap
+
+### v0.1.x（当前）
+
+- [x] 33 个内置 adapter
+- [x] Tool 模式：claude-code / codex / gemini-cli / kimi-cli / snow-cli / officecli 等
+- [x] Agent 模式：claude-code (stream-json) / snow-cli (line-based)
+- [x] 交互式 Web UI（6 个 section + SSE + 12 个 HTTP 端点）
+- [x] DSH CLI 子命令
+
+### v0.2.x（计划中）
+
+- [ ] Agent 模式扩展到 codex / gemini-cli / qwen / trae
+- [ ] Kimi Agent 模式接入（stdio-jsonrpc）
+- [ ] 更多 adapter 的 provider 实时额度查询（codex / gemini-cli / copilot）
+- [ ] adapter 自动发现机制（不写 ts 文件也能注册）
+- [ ] Web UI 增强：额度趋势图 / 调用历史时间线 / adapter 模板生成器
+
+### v0.3.x（远期）
+
+- [ ] MCP 协议统一接入（把所有 adapter 转成 MCP server）
+- [ ] 跨机集群扫描（扫描局域网内多台机器的 CLI）
+- [ ] 额度计费聚合报表
 
 ---
 
