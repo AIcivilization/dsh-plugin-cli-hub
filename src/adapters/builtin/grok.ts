@@ -17,7 +17,7 @@ export const grokAdapter = defineCliAdapter({
   installHint: 'npm i -g @xai/grok-cli，然后 export XAI_API_KEY=xai-...',
 
   fingerprint: {
-    commandNames: ['grok', 'grok-cli'],
+    commandNames: ['grok', 'grok-cli', 'grok-agent'],
     versionArgs: ['--version'],
     versionPattern: /grok(?:\s*cli)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.grok', '~/.config/grok'],

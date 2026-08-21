@@ -23,7 +23,7 @@ export const claudeCodeAdapter = defineCliAdapter({
   defaultEnabled: true,
 
   fingerprint: {
-    commandNames: ['claude', 'claude-code'],
+    commandNames: ['claude', 'claude-code', 'claude-cli', 'claude-agent'],
     versionArgs: ['--version'],
     versionPattern: /(?:claude\s*code|claude)\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.anthropic', '~/Library/Application Support/Claude Code', '~/.claude'],

@@ -17,7 +17,7 @@ export const codexAdapter = defineCliAdapter({
   installHint: 'npm i -g @openai/codex，然后 export OPENAI_API_KEY=sk-...',
 
   fingerprint: {
-    commandNames: ['codex', 'openai-codex'],
+    commandNames: ['codex', 'openai-codex', 'codex-cli', 'codex-code-mode-host'],
     versionArgs: ['--version'],
     versionPattern: /codex(?:\s*cli)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.codex', '~/.config/codex'],

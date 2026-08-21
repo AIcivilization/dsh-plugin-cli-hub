@@ -17,7 +17,7 @@ export const cursorCliAdapter = defineCliAdapter({
   installHint: 'npm i -g @cursor/cli 或在 Cursor IDE 内"Install CLI"，然后 cursor login',
 
   fingerprint: {
-    commandNames: ['cursor', 'cursor-cli'],
+    commandNames: ['cursor', 'cursor-cli', 'cursor-agent'],
     versionArgs: ['--version'],
     versionPattern: /cursor(?:\s*cli)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.cursor', '~/Library/Application Support/Cursor'],

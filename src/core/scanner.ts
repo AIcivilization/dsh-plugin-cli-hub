@@ -204,20 +204,7 @@ export class ScannerServiceImpl implements ScannerService {
     const now = Date.now();
     if (this._pathCache && now - this._pathCache.ts < 5000) return this._pathCache.entries;
 
-    // macOS launchd 后台进程会重置 PATH 到 /usr/bin:/bin:/usr/sbin:/sbin
-    // 主动补全常见 bin 目录，确保能扫到 ~/.local/bin/claude、/opt/homebrew/bin/gemini 等
-    const rawPath = process.env.PATH ?? '';
-    const extraDirs = [
-      process.env.HOME ? `${process.env.HOME}/.local/bin` : undefined,
-      '/usr/local/bin',
-      '/opt/homebrew/bin',
-      '/opt/homebrew/sbin',
-    ].filter(Boolean) as string[];
-    const missingDirs = extraDirs.filter(d => !rawPath.includes(d));
-    const pathEnv = missingDirs.length > 0
-      ? [...missingDirs, rawPath].filter(Boolean).join(path.delimiter)
-      : rawPath;
-    const dirs = pathEnv.split(path.delimiter).filter(Boolean);
+    const dirs = this._collectScanDirs();
     const seen = new Set<string>();
     const entries: PathEntry[] = [];
 
@@ -258,6 +245,221 @@ export class ScannerServiceImpl implements ScannerService {
     return entries;
   }
 
+  /**
+   * 收集所有可能装了 AI CLI 的扫描目录。
+   *
+   * 层次：
+   *   1. $PATH 中的目录（已展开 ~/.local/bin 等）
+   *   2. 用户家目录下的常用 bin：~/.local/bin、~/.bun/bin、~/.cargo/bin、~/go/bin、
+   *      ~/.local/share/pnpm、~/.local/share/npm-global/bin、~/Library/Python/{ver}/bin
+   *   3. macOS App bundle 内嵌 CLI：
+   *      /Applications/{App}.app/Contents/MacOS/
+   *      /Applications/{App}.app/Contents/Resources/app/modules/ai-agent/bin/
+   *      /Applications/{App}.app/Contents/Resources/bin/
+   *   4. macOS 包管理器：/usr/local/bin、/opt/homebrew/bin、/opt/homebrew/sbin
+   *   5. npm global bin（动态查 npm config get prefix）
+   *   6. npm global lib/node_modules/{pkg}/bin（如 @anthropic-ai/claude-code 的 bin）
+   *
+   * 不依赖 shell 子进程，纯 fs 调用，速度快且安全。
+   */
+  private _collectScanDirs(): string[] {
+    const home = os.homedir();
+    const rawPath = process.env.PATH ?? '';
+    const pathDirs = rawPath.split(path.delimiter).filter(Boolean);
+
+    // 1/2. 用户家目录下的常用 bin
+    const homeBins: (string | undefined)[] = [
+      `${home}/.local/bin`,
+      `${home}/.bun/bin`,
+      `${home}/.cargo/bin`,
+      `${home}/go/bin`,
+      `${home}/.local/share/pnpm`,
+      `${home}/.local/share/npm-global/bin`,
+      `${home}/.npm-global/bin`,
+      `${home}/.volta/bin`,
+      `${home}/.deno/bin`,
+      `${home}/.foundry/bin`,
+      // Python 用户脚本目录（pip install --user 装的 CLI 在这）
+      ...this._pythonUserBins(home),
+      // 各种 IDE/Agent 自带的 bin 目录
+      `${home}/.codeium/windsurf/bin`,
+      `${home}/.catpawai/bin`,
+      `${home}/.grok/bin`,
+      `${home}/.opencode/bin`,
+      `${home}/.claude/bin`,
+      `${home}/.gemini/bin`,
+      `${home}/.ollama/bin`,
+      `${home}/.config/claude/bin`,
+    ];
+
+    // 3. macOS App bundle 内嵌 CLI
+    const appBundleBins = process.platform === 'darwin'
+      ? this._discoverAppBundleBins()
+      : [];
+
+    // 4. macOS 包管理器
+    const pkgManagerBins: (string | undefined)[] = [
+      '/usr/local/bin',
+      '/usr/local/sbin',
+      '/opt/homebrew/bin',
+      '/opt/homebrew/sbin',
+      '/opt/local/bin',
+      '/opt/local/sbin',
+    ];
+
+    // 5/6. npm global
+    const npmBins = this._discoverNpmGlobalBins(home);
+
+    // 合并 + 去重（保序：PATH 在前，home bin、app bundle、pkg mgr、npm 在后）
+    const all = [
+      ...pathDirs,
+      ...homeBins,
+      ...appBundleBins,
+      ...pkgManagerBins,
+      ...npmBins,
+    ].filter((d): d is string => !!d && d.length > 0);
+
+    // 去掉重复，但保留首次出现的顺序
+    const dedup = Array.from(new Set(all));
+    return dedup;
+  }
+
+  /** 探测 Python 用户脚本目录（macOS 上是 ~/Library/Python/3.x/bin，Linux 是 ~/.local/bin） */
+  private _pythonUserBins(home: string): string[] {
+    const results: string[] = [];
+    if (process.platform === 'darwin') {
+      const base = `${home}/Library/Python`;
+      try {
+        const versions = fs.readdirSync(base);
+        for (const v of versions) {
+          const binDir = path.join(base, v, 'bin');
+          results.push(binDir);
+        }
+      } catch { /* Python 未装 */ }
+    } else if (process.platform === 'linux') {
+      results.push(`${home}/.local/bin`);
+    }
+    return results;
+  }
+
+  /**
+   * 探测 macOS /Applications 下的 AI IDE App bundle 内嵌 CLI。
+   *
+   * 已知会内嵌 CLI 的 App：
+   *   - Claude.app        → Contents/MacOS/claude (软链)
+   *   - Gemini.app        → Contents/MacOS/gemini
+   *   - OpenCode.app       → Contents/MacOS/opencode
+   *   - Ollama.app         → Contents/MacOS/ollama
+   *   - TRAE SOLO CN.app   → Contents/Resources/app/modules/ai-agent/bin/agent-tool-host, ctx-cli
+   *   - Cursor.app         → Contents/Resources/app/bin/cursor
+   *   - Windsurf.app       → Contents/Resources/app/bin/windsurf
+   *   - Zed.app            → Contents/Resources/app/bin/zed
+   *
+   * 这些二进制不一定在 PATH 上，必须主动枚举才能发现。
+   */
+  private _discoverAppBundleBins(): string[] {
+    const results: string[] = [];
+    const appsRoot = '/Applications';
+    const userApps = `${os.homedir()}/Applications`;
+    for (const root of [appsRoot, userApps]) {
+      let apps: string[] = [];
+      try { apps = fs.readdirSync(root); } catch { continue; }
+      for (const app of apps) {
+        if (!app.endsWith('.app')) continue;
+        const appDir = path.join(root, app);
+        const candidates = [
+          path.join(appDir, 'Contents', 'MacOS'),
+          path.join(appDir, 'Contents', 'Resources', 'bin'),
+          path.join(appDir, 'Contents', 'Resources', 'app', 'bin'),
+          path.join(appDir, 'Contents', 'Resources', 'app', 'modules', 'ai-agent', 'bin'),
+        ];
+        for (const c of candidates) {
+          try {
+            // 只验证目录存在；L1 主循环会逐个 stat/exec
+            const s = fs.statSync(c);
+            if (s.isDirectory()) results.push(c);
+          } catch { /* 不存在则跳过 */ }
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
+   * 探测 npm 全局 bin 目录。
+   *
+   * 优先级：
+   *   1. npm config get prefix（但要 fork，避免在扫描循环里调）
+   *   2. 常见默认路径推断：
+   *      - homebrew node:    /opt/homebrew
+   *      - nvm/volta:        $HOME/.nvm/versions/node/{ver}/bin, $HOME/.volta/bin
+   *      - n 管理器:         /usr/local/n/versions/node/{ver}/bin
+   *      - nodenv:           $HOME/.nodenv/versions/{ver}/bin
+   *   3. 解析 $HOME/.local/lib/node_modules/{pkg}/{bin or package.json#bin} 的软链目标
+   *      （很多 CLI 用 npm i -g 装但 bin 名和包名不一致，如 @anthropic-ai/claude-code）
+   */
+  private _discoverNpmGlobalBins(home: string): string[] {
+    const results: string[] = [];
+    // 常见 npm prefix 候选
+    const prefixCandidates = [
+      `${home}/.local`,                              // 用户级 npm prefix
+      `${home}/.npm-global`,
+      '/usr/local',                                  // 系统 npm
+      '/opt/homebrew',                               // Apple Silicon homebrew
+      `${home}/.volta`,
+    ];
+    for (const prefix of prefixCandidates) {
+      results.push(`${prefix}/bin`);
+    }
+    // nvm：枚举所有版本
+    try {
+      const nvmVersions = `${home}/.nvm/versions/node`;
+      for (const v of fs.readdirSync(nvmVersions)) {
+        results.push(`${nvmVersions}/${v}/bin`);
+      }
+    } catch { /* nvm 未装 */ }
+    // nodenv
+    try {
+      const nodenv = `${home}/.nodenv/versions`;
+      for (const v of fs.readdirSync(nodenv)) {
+        results.push(`${nodenv}/${v}/bin`);
+      }
+    } catch { /* nodenv 未装 */ }
+
+    // 解析 npm prefix/lib/node_modules 下的包 bin（包名和 bin 名不同的情况）
+    for (const prefix of prefixCandidates) {
+      const nmDir = `${prefix}/lib/node_modules`;
+      try {
+        const scopes = fs.readdirSync(nmDir);
+        for (const scope of scopes) {
+          // scope 可能是 @xxx 目录，也可能是直接包
+          const scopePath = path.join(nmDir, scope);
+          let stat;
+          try { stat = fs.statSync(scopePath); } catch { continue; }
+          if (!stat.isDirectory()) continue;
+          if (scope.startsWith('@')) {
+            // 枚举 scope 下的包
+            let pkgDirs: string[] = [];
+            try { pkgDirs = fs.readdirSync(scopePath); } catch { continue; }
+            for (const pkg of pkgDirs) {
+              const pkgPath = path.join(scopePath, pkg);
+              const binDir = path.join(pkgPath, 'bin');
+              try {
+                if (fs.statSync(binDir).isDirectory()) results.push(binDir);
+              } catch { /* 无 bin 目录 */ }
+            }
+          } else {
+            const binDir = path.join(scopePath, 'bin');
+            try {
+              if (fs.statSync(binDir).isDirectory()) results.push(binDir);
+            } catch { /* 无 bin 目录 */ }
+          }
+        }
+      } catch { /* 路径不存在 */ }
+    }
+    return results;
+  }
+
   private _stripExe(name: string): string {
     return name.endsWith('.exe') ? name.slice(0, -4) : name;
   }
@@ -265,12 +467,27 @@ export class ScannerServiceImpl implements ScannerService {
   private _looksLikeAiCli(name: string): boolean {
     // 启发式：名字匹配常见 AI CLI 关键字段（用于"未匹配 adapter 但仍展示"）
     const n = name.toLowerCase();
+    // 完全匹配 / 前缀 / 后缀 三种命中方式
     const keywords = [
-      'gpt', 'ai', 'llm', 'agent', 'claude', 'codex', 'copilot', 'kimi', 'qwen',
-      'goose', 'mistral', 'snow', 'openclaw', 'claw', 'cursor', 'hermes', 'code',
-      'devin', 'factory', 'droid', 'vibe', 'nano', 'bot', 'cli'
+      // 通用 AI 关键字
+      'gpt', 'ai', 'llm', 'agent', 'code', 'cli', 'bot', 'pilot', 'devin',
+      'factory', 'droid', 'vibe', 'nano',
+      // 已知 AI CLI / IDE 厂商产品名
+      'claude', 'codex', 'copilot', 'gemini', 'kimi', 'qwen', 'grok', 'aider',
+      'cline', 'continue', 'cursor', 'windsurf', 'aichat', 'tgpt', 'ollama',
+      'litellm', 'goose', 'mistral', 'snow', 'junie', 'trae', 'hermes',
+      // 第二方/开源 AI Agent
+      'paperclip', 'freebuff', 'soul', 'catpaw', 'catpawai',
+      'openclaw', 'claw', 'acp', 'mcp', 'openai', 'anthropic',
+      'harness', 'openclaudia', 'opencode',
     ];
-    return keywords.some(k => n === k || n.startsWith(k + '-') || n.endsWith('-' + k));
+    return keywords.some(k =>
+      n === k ||
+      n.startsWith(k + '-') ||
+      n.endsWith('-' + k) ||
+      n.startsWith(k + '.') ||
+      n.startsWith(k + '_'),
+    );
   }
 
   private async _probeVersion(
@@ -368,21 +585,9 @@ export class ScannerServiceImpl implements ScannerService {
     args: string[],
     timeoutMs: number,
   ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-    // macOS launchd 后台进程会重置 PATH；补全常见 bin 目录确保能找到 claude/gemini/codex
-    const scanEnv = { ...process.env };
-    {
-      const extraPaths = [
-        process.env.HOME ? `${process.env.HOME}/.local/bin` : undefined,
-        '/usr/local/bin',
-        '/opt/homebrew/bin',
-        '/opt/homebrew/sbin',
-      ].filter(Boolean) as string[];
-      const cur = scanEnv.PATH || '';
-      const missing = extraPaths.filter(p => !cur.includes(p));
-      if (missing.length > 0) {
-        scanEnv.PATH = [...missing, cur].filter(Boolean).join(':');
-      }
-    }
+    // macOS launchd 后台进程会重置 PATH；补全 _collectScanDirs 中的所有 bin 目录
+    // 确保 spawn 子进程能找到 ~/.local/bin/claude、/opt/homebrew/bin/gemini 等
+    const scanEnv = this._withExtendedPath(process.env);
     // 优先走 DSH subprocess（如果有）—— 必须走 safeGetCtx，避免 Cordis proxy 抛「cannot get subprocess without inject」
     try {
       const sp: any = safeGetCtx(this._ctx, 'subprocess');
@@ -422,19 +627,8 @@ export class ScannerServiceImpl implements ScannerService {
       let child: any;
       try {
         // macOS launchd 后台进程会重置 PATH 到 /usr/bin:/bin:/usr/sbin:/sbin
-        // 主动补全常见 bin 目录，确保能找到 ~/.local/bin/claude、/opt/homebrew/bin/gemini 等
-        const extraPaths = [
-          process.env.HOME ? `${process.env.HOME}/.local/bin` : undefined,
-          '/usr/local/bin',
-          '/opt/homebrew/bin',
-          '/opt/homebrew/sbin',
-        ].filter(Boolean) as string[];
-        const env = { ...process.env };
-        const currentPath = env.PATH || '';
-        const missing = extraPaths.filter(p => !currentPath.includes(p));
-        if (missing.length > 0) {
-          env.PATH = [...missing, currentPath].filter(Boolean).join(':');
-        }
+        // 复用 _collectScanDirs 推导的全部目录，确保能找到 ~/.local/bin/claude 等
+        const env = this._withExtendedPath(process.env);
         child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
       } catch (e: any) {
         clearTimeout(t);
@@ -457,6 +651,24 @@ export class ScannerServiceImpl implements ScannerService {
         resolve({ stdout: stdoutBuf, stderr: stderrBuf, exitCode: code });
       });
     }));
+  }
+
+  /**
+   * 给 env 注入扩展后的 PATH。
+   *
+   * _safeExec / _safeExecNative 用这个来给 fork 出来的子进程一个完整的 PATH，
+   * 让 `claude --version` / `kimi auth status` 等能在 launchd 重置 PATH 的环境下也能跑。
+   */
+  private _withExtendedPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+    const scanDirs = this._collectScanDirs();
+    const cur = env.PATH || '';
+    const missing = scanDirs.filter(p => !cur.includes(p));
+    return {
+      ...env,
+      PATH: missing.length > 0
+        ? [...missing, cur].filter(Boolean).join(path.delimiter)
+        : cur,
+    };
   }
 }
 

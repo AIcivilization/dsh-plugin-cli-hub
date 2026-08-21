@@ -17,7 +17,7 @@ export const opencodeAdapter = defineCliAdapter({
   installHint: 'npm i -g opencode，然后 export ANTHROPIC_API_KEY 或 OPENAI_API_KEY',
 
   fingerprint: {
-    commandNames: ['opencode'],
+    commandNames: ['opencode', 'opencode-cli', 'opencode-agent'],
     versionArgs: ['--version'],
     versionPattern: /opencode\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.opencode', '~/.config/opencode'],

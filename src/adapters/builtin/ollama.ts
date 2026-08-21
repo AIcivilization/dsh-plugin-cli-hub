@@ -17,7 +17,7 @@ export const ollamaAdapter = defineCliAdapter({
   installHint: 'curl -fsSL https://ollama.com/install.sh | sh，然后 ollama pull llama3.1',
 
   fingerprint: {
-    commandNames: ['ollama'],
+    commandNames: ['ollama', 'ollama-cli'],
     versionArgs: ['--version'],
     versionPattern: /(?:ollama\s+is\s+)?v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.ollama', '/usr/share/ollama'],

@@ -17,7 +17,7 @@ export const geminiCliAdapter = defineCliAdapter({
   installHint: 'npm i -g @anthropic-ai/gemini-cli，然后 export GEMINI_API_KEY=...',
 
   fingerprint: {
-    commandNames: ['gemini', 'gemini-cli'],
+    commandNames: ['gemini', 'gemini-cli', 'gemini-cli-v2'],
     versionArgs: ['--version'],
     versionPattern: /gemini(?:\s*cli)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.gemini', '~/.config/gemini'],

@@ -17,7 +17,7 @@ export const traeAdapter = defineCliAdapter({
   installHint: 'npm i -g @trae/cli，然后 trae auth login',
 
   fingerprint: {
-    commandNames: ['trae', 'trae-cli'],
+    commandNames: ['trae', 'trae-cli', 'trae-agent', 'agent-tool-host', 'ctx-cli'],
     versionArgs: ['--version'],
     versionPattern: /trae(?:\s*cli)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.trae', '~/Library/Application Support/Trae'],

@@ -17,7 +17,7 @@ export const windsurfAdapter = defineCliAdapter({
   installHint: 'curl -fsSL https://windsurf.com/install.sh | bash 或在 Windsurf IDE 内安装',
 
   fingerprint: {
-    commandNames: ['windsurf'],
+    commandNames: ['windsurf', 'windsurf-cli', 'devin-desktop'],
     versionArgs: ['--version'],
     versionPattern: /windsurf\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.windsurf', '~/Library/Application Support/Windsurf'],
