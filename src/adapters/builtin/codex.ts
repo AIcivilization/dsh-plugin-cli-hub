@@ -56,8 +56,15 @@ export const codexAdapter = defineCliAdapter({
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
-          kind: 'template',
-          template: 'codex exec --json --model {{model}} --cwd {{workdir}} "{{task}}"',
+          kind: 'argv',
+          command: 'codex',
+          args: [
+            'exec',
+            '--json',
+            { flag: '--model', var: 'model' },
+            { flag: '--cwd', var: 'workdir' },
+            { var: 'task' },
+          ],
           workdirVar: 'workdir',
         },
         outputParser: 'stdout-json',

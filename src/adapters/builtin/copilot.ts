@@ -49,8 +49,14 @@ export const copilotAdapter = defineCliAdapter({
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
-          kind: 'template',
-          template: 'copilot suggest "{{prompt}}" --language {{language}} --json',
+          kind: 'argv',
+          command: 'copilot',
+          args: [
+            'suggest',
+            { var: 'prompt' },
+            { flag: '--language', var: 'language' },
+            '--json',
+          ],
           workdirVar: 'workdir',
         },
         outputParser: 'stdout-json',
@@ -70,8 +76,13 @@ export const copilotAdapter = defineCliAdapter({
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
-          kind: 'template',
-          template: 'copilot explain "{{snippet}}" --json',
+          kind: 'argv',
+          command: 'copilot',
+          args: [
+            'explain',
+            { var: 'snippet' },
+            '--json',
+          ],
         },
         outputParser: 'stdout-json',
         timeoutMs: 60_000,

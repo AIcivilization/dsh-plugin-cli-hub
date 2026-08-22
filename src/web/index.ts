@@ -27,7 +27,9 @@ import type {
 
 export const name = 'dsh-plugin-cli-hub/web';
 // 与主插件相同的设计决策：所有 ctx 属性都走 safeGet，inject 为空（永远能激活）
-export const inject = ['webServer'];
+// 这样纯 CLI 模式（dsh cli-hub list）下，插件不会因为缺 webServer 服务而永远 pending；
+// HTTP 路由通过 apply 内部的延迟轮询 safeGet 拿到 webServer 后再挂载，拿不到就跳过。
+export const inject: string[] = [];
 
 /** 与主插件一致的安全属性读取：绕过 inject 白名单检查。
  *  注：Cordis rc 版即使 reflect.get(prop,false) 也会抛"cannot get property X without inject"
@@ -1398,8 +1400,8 @@ function makeRing(size = 50) {
 // apply 入口
 // ============================================================
 export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = undefined) {
-  // inject=['webServer']：cordis fiber 等 webServer 服务就绪后才激活，此时 ctx.webServer 直接可读
-  // safeGet 仍作为 fallback（用于测试环境 / 旧版 DSH 没有 webServer 时不抛错）
+  // inject=[]：fiber 立刻激活（不依赖 webServer 服务），HTTP 路由通过延迟轮询 safeGet 拿到 webServer 后再挂载。
+  // 这样纯 CLI 模式（dsh cli-hub list 等）下插件不会因为缺 webServer 而 pending。
   const $logger      = safeGet(ctx, 'logger');
   const $settings    = safeGet(ctx, 'settings');
   const $clientPages = safeGet(ctx, 'clientPages');

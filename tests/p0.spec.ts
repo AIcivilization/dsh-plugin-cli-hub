@@ -238,6 +238,112 @@ describe('ToolGateway', () => {
     expect(rendered.cmd).toBe('/bin/echo');
   });
 
+  it('argv 模式：prompt 含双引号/分号不会被截断，且空格不拆参数', () => {
+    const { gw } = makeSetup() as any;
+    const rt = {
+      adapterId: 'argv-test',
+      execPath: '/tmp/fake-copilot',
+      def: {
+        dshToolName: 'cli-hub:argv:suggest',
+        commandMapping: {
+          kind: 'argv',
+          command: 'copilot',
+          args: [
+            'suggest',
+            { var: 'prompt' },
+            { flag: '--language', var: 'language' },
+            '--json',
+          ],
+        },
+      },
+    } as any;
+    const prompt = 'hello "world" ; cat /etc/passwd && rm -rf /';
+    const r = gw._renderCommand(rt, { prompt, language: 'sh' }, { workspace: '/tmp', homedir: '/tmp' });
+    expect(r.cmd).toBe('/tmp/fake-copilot');
+    // prompt 必须完整保留，作为独立 argv，不被切分
+    expect(r.args).toEqual([
+      'suggest',
+      'hello "world" ; cat /etc/passwd && rm -rf /',
+      '--language',
+      'sh',
+      '--json',
+    ]);
+  });
+
+  it('argv 模式：空格路径不被拆分成多个参数', () => {
+    const { gw } = makeSetup() as any;
+    const rt = {
+      adapterId: 'argv-spaces',
+      execPath: '/usr/bin/kimi',
+      def: {
+        commandMapping: {
+          kind: 'argv',
+          command: 'kimi',
+          args: [
+            'read',
+            { flag: '--file', var: 'file' },
+          ],
+        },
+      },
+    } as any;
+    const r = gw._renderCommand(rt, { file: '/Users/我的文档/report 2026.pdf' }, { workspace: '/tmp', homedir: '/tmp' });
+    // 含空格的路径必须是单个 arg（不是 3 个）
+    expect(r.args).toContain('/Users/我的文档/report 2026.pdf');
+    expect(r.args.length).toBe(3); // ['read', '--file', '<path>']
+  });
+
+  it('argv 模式：flag+var 的 pair 为空时跳过不传', () => {
+    const { gw } = makeSetup() as any;
+    const rt = {
+      adapterId: 'argv-opt',
+      execPath: '/usr/bin/snow',
+      def: {
+        commandMapping: {
+          kind: 'argv',
+          command: 'snow',
+          args: [
+            'draw',
+            { flag: '--prompt', var: 'prompt' },
+            { flag: '--style', var: 'style' },          // 空 → 跳过
+            { flag: '--size', var: 'size', defaultValue: '1024x1024' },  // 空 → 用默认
+            { flag: '--seed', var: 'seed' },            // 空 → 跳过
+          ],
+        },
+      },
+    } as any;
+    const r = gw._renderCommand(rt, { prompt: 'a cat' }, { workspace: '/tmp', homedir: '/tmp' });
+    expect(r.args).toEqual([
+      'draw',
+      '--prompt', 'a cat',
+      '--size', '1024x1024',
+    ]);
+  });
+
+  it('argv / template 模式：含 NUL 字节或超 100k 长度变量抛错', () => {
+    const { gw } = makeSetup() as any;
+    const makeRt = (kind: any) => ({
+      adapterId: 'sanitize',
+      execPath: '/bin/echo',
+      def: {
+        commandMapping: kind === 'argv'
+          ? { kind: 'argv', command: 'echo', args: [{ var: 'x' }] }
+          : { kind: 'template', template: 'echo {{x}}' },
+      },
+    }) as any;
+
+    // NUL 字节
+    for (const kind of ['argv', 'template'] as const) {
+      expect(() => gw._renderCommand(makeRt(kind), { x: 'a\x00b' }, { workspace: '/tmp', homedir: '/tmp' }))
+        .toThrow(/NUL/);
+    }
+    // 超长
+    const huge = 'x'.repeat(150_000);
+    for (const kind of ['argv', 'template'] as const) {
+      expect(() => gw._renderCommand(makeRt(kind), { x: huge }, { workspace: '/tmp', homedir: '/tmp' }))
+        .toThrow(/超过上限/);
+    }
+  });
+
   it('cooldown：连续失败 N 次后短时间阻止调用', async () => {
     const { gw, reg, ctx } = makeSetup() as any;
 

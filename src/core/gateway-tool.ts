@@ -66,6 +66,30 @@ function renderValue(value: unknown): string {
   return value == null ? '' : String(value);
 }
 
+/**
+ * 安全断言：每个 argv 字符串必须是普通 JS 字符串，不含 NUL 字节，长度不超过 100k。
+ * 这是为了在任何渲染路径（argv / template / resolver）上都避免 execFile 的底层问题。
+ */
+const MAX_ARG_LEN = 100_000;
+function sanitizeArg(what: string, v: string, adapterId: string, toolName: string): string {
+  if (typeof v !== 'string') {
+    throw new Error(
+      `[cli-hub] ${adapterId}/${toolName}: ${what} 必须是字符串类型，实际是 ${typeof v}`,
+    );
+  }
+  if (v.length > MAX_ARG_LEN) {
+    throw new Error(
+      `[cli-hub] ${adapterId}/${toolName}: ${what} 长度 ${v.length} 超过上限 ${MAX_ARG_LEN}`,
+    );
+  }
+  if (v.includes('\0')) {
+    throw new Error(
+      `[cli-hub] ${adapterId}/${toolName}: ${what} 包含 NUL 字节，拒绝执行`,
+    );
+  }
+  return v;
+}
+
 export class ToolGatewayImpl implements ToolGateway {
   private _emitter = new EventEmitter();
   private _registered = new Map<string, RegisteredTool>();  // key = dshToolName
@@ -336,42 +360,123 @@ export class ToolGatewayImpl implements ToolGateway {
     runtimeCtx: RuntimeContext,
   ): { cmd: string; args: string[]; cwd?: string; env?: Record<string, string>; outputFile?: string } {
     const mapping = rt.def.commandMapping;
-    if (mapping.kind === 'resolver') {
-      return mapping.resolver(input, runtimeCtx);
-    }
-    // template
-    const tpl = mapping.template.trim();
-    // 切分：先把 CLI 名和参数分开。第一个 token = cmd，后面 = args 模板
-    const tokens = tpl.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
-    if (!tokens.length) throw new Error('empty command template');
+    const adapterId = rt.adapterId;
+    const toolName = rt.def.dshToolName;
 
-    const fullVars: Record<string, string> = {
-      ...Object.fromEntries(Object.entries(input).map(([k, v]) => [k, String(v ?? '')])),
+    const fullVars: Record<string, any> = {
+      ...input,
       workspace: runtimeCtx.workspace,
       home: runtimeCtx.homedir ?? os.homedir(),
-      // 常用自动变量
-      __output__: mapping.outputFileVar
-        ? (input[mapping.outputFileVar] ?? path.join(runtimeCtx.workspace, `cli-hub-${rt.def.dshToolName}-${Date.now()}.bin`))
-        : '',
+    };
+    const getVar = (name: string, defaultValue?: unknown): unknown => {
+      const v = fullVars[name];
+      if (v === undefined || v === null || v === '') return defaultValue;
+      return v;
+    };
+    const hasValue = (name: string): boolean => {
+      const v = fullVars[name];
+      return !(v === undefined || v === null || v === '');
     };
 
-    // 模板渲染：变量直接替换（execFile 语义，无需 shell escape）
-    const render = (s: string): string => s.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, name) => {
-      const v = fullVars[name];
-      if (v === undefined) return '';
-      return renderValue(v);
-    });
+    let args: string[] = [];
+    let cmdToken: string = '';
+    let workdirVar: string | undefined;
+    let outputFileVar: string | undefined;
 
-    const cmdToken = render(tokens[0] ?? '');
-    // 如果 cmdToken 是个基名，用已发现的完整 execPath 覆盖（强制走扫描发现的那条，防 PATH 劫持）
-    const actualCmd: string = cmdToken.includes(path.sep) ? cmdToken : (rt.execPath ?? cmdToken);
-    const args = tokens.slice(1).map(render);
+    if (mapping.kind === 'resolver') {
+      const resolved = mapping.resolver(input, runtimeCtx);
+      const cmd = sanitizeArg('cmd (resolver)', resolved.cmd, adapterId, toolName);
+      const actualCmd = cmd.includes(path.sep) ? cmd : (rt.execPath ?? cmd);
+      const safeArgs = resolved.args.map((a, i) => sanitizeArg(`args[${i}] (resolver)`, String(a), adapterId, toolName));
+      return {
+        cmd: actualCmd,
+        args: safeArgs,
+        cwd: resolved.cwd,
+        env: resolved.env,
+        outputFile: resolved.outputFile,
+      };
+    }
+
+    if (mapping.kind === 'argv') {
+      cmdToken = mapping.command;
+      workdirVar = mapping.workdirVar;
+      outputFileVar = mapping.outputFileVar;
+      // 填 __output__ 变量（若声明了 outputFileVar）
+      if (outputFileVar) {
+        (fullVars as any).__output__ =
+          getVar(outputFileVar) ??
+          path.join(runtimeCtx.workspace, `cli-hub-${toolName}-${Date.now()}.bin`);
+      }
+      for (const item of mapping.args) {
+        if (typeof item === 'string') {
+          args.push(sanitizeArg('argv literal', item, adapterId, toolName));
+          continue;
+        }
+        if ('flag' in item) {
+          // pair 模式：变量有值就传 [flag, value]，否则跳过
+          const v = getVar(item.var, item.defaultValue);
+          if (v === undefined || v === null || v === '') continue;
+          args.push(sanitizeArg('argv flag', item.flag, adapterId, toolName));
+          args.push(sanitizeArg(`argv pair[${item.flag}]`, String(v), adapterId, toolName));
+          continue;
+        }
+        // 纯变量
+        let v = getVar(item.var, item.defaultValue);
+        if (v === undefined || v === null || v === '') {
+          if (item.skipIfEmpty) continue;
+          v = '';
+        }
+        args.push(sanitizeArg(`argv var[${item.var}]`, String(v), adapterId, toolName));
+      }
+    } else {
+      // kind: template（向后兼容，打 DEPRECATE 警告）
+      const logger = this._logger();
+      logger?.warn?.(
+        `[cli-hub] DEPRECATE: adapter ${adapterId} / tool ${toolName} 使用 kind: 'template'，` +
+        `将在 v0.2.0 移除，请迁移到 kind: 'argv'。`,
+      );
+      const tpl = mapping.template.trim();
+      const tokens = tpl.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
+      if (!tokens.length) throw new Error('empty command template');
+      cmdToken = tokens[0] ?? '';
+      workdirVar = mapping.workdirVar;
+      outputFileVar = mapping.outputFileVar;
+      if (outputFileVar) {
+        (fullVars as any).__output__ =
+          getVar(outputFileVar) ??
+          path.join(runtimeCtx.workspace, `cli-hub-${toolName}-${Date.now()}.bin`);
+      }
+      const renderTpl = (s: string): string =>
+        s.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name) => renderValue(fullVars[name]));
+      // 去掉字符串模板头尾的引号（如果 token 是被引号包的常量，恢复成不带引号的字符串 arg 传给 execFile）
+      const stripQuotes = (s: string): string => {
+        if (s.length >= 2 && ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'"))) {
+          return s.slice(1, -1);
+        }
+        return s;
+      };
+      cmdToken = stripQuotes(renderTpl(cmdToken));
+      args = tokens.slice(1).map(t => sanitizeArg(
+        `template token "${t}"`,
+        stripQuotes(renderTpl(t)),
+        adapterId,
+        toolName,
+      ));
+    }
+
+    // cmd 解析：基名 → 用已扫描到的 execPath 完整路径替换（防止 PATH 劫持）
+    const actualCmd: string = cmdToken.includes(path.sep)
+      ? sanitizeArg('cmd', cmdToken, adapterId, toolName)
+      : (rt.execPath ?? sanitizeArg('cmd fallback', cmdToken, adapterId, toolName));
 
     let cwd: string | undefined;
-    if (mapping.workdirVar) cwd = fullVars[mapping.workdirVar] || runtimeCtx.workspace;
+    if (workdirVar) {
+      cwd = String(getVar(workdirVar, runtimeCtx.workspace) ?? runtimeCtx.workspace);
+    }
     let outputFile: string | undefined;
-    if (mapping.outputFileVar) outputFile = fullVars[mapping.outputFileVar] || fullVars.__output__;
-
+    if (outputFileVar) {
+      outputFile = String(getVar(outputFileVar, (fullVars as any).__output__) ?? (fullVars as any).__output__);
+    }
     return { cmd: actualCmd, args, cwd, outputFile };
   }
 

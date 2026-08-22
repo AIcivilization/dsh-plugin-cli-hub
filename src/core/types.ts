@@ -70,6 +70,39 @@ export interface ToolCapabilityDeclaration {
   inputSchema: JSONSchema7;
   commandMapping:
     | {
+        /**
+         * 推荐方式：按数组传入 argv，每个变量独立一个 argv[i]，天然避免空格/引号注入。
+         * 支持字符串常量、变量、flag 开关（skipIfEmpty）、可选值四种形式。
+         */
+        kind: 'argv';
+        command: string;                              // 可执行文件基名或绝对路径，推荐基名，由 gateway-tool 替换为 rt.execPath
+        args: Array<
+          | string                                    // 字面量，例如 '--json'
+          | {
+              /** 从 input / runtimeCtx 自动变量里取值 */
+              var: string;
+              /** 若该变量为空或未定义，整个 argv 项（连同前面的 flag，如果在 pair 中）跳过不传 */
+              defaultValue?: string;
+              /** 当值为空或 undefined 时跳过，而不是用 defaultValue/空串。纯 flag 场景用不到，纯 var 不传很方便 */
+              skipIfEmpty?: boolean;
+            }
+          | {
+              /** pair 模式：若变量有值，则传 ['--flag', value]；否则都跳过 */
+              flag: string;
+              var: string;
+              defaultValue?: string;
+            }
+        >;
+        outputFileVar?: string;                       // 声明 input 里哪个字段代表"输出文件路径"，会在 __output__ 变量等地方生效
+        workdirVar?: string;                          // 声明 input 里哪个字段代表"工作目录"，缺省走 runtimeCtx.workspace
+      }
+    | {
+        /**
+         * 【Deprecated，将在 v0.2.0 移除】
+         * 向后兼容的字符串模板方式。会在运行时记录 DEPRECATE 警告。
+         * 字符串里的引号、空格会按 shell token 切分，但变量依然直接替换为独立参数（execFile 不经 shell）。
+         * 新 adapter 请直接使用 kind: 'argv'。
+         */
         kind: 'template';
         template: string;
         outputFileVar?: string;

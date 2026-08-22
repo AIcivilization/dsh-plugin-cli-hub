@@ -75,7 +75,7 @@ export const name = 'dsh-plugin-cli-hub';
  *  其他服务（storage/settings/tools/logger/subprocess）继续走 safeGet 兜底，
  *  因为它们在测试环境或非 web profile 中可能不存在，强行 inject 会死锁。
  */
-export const inject = ['webServer'];
+export const inject: string[] = [];
 
 /** 安全读取 Cordis ctx 上的属性：全链路 try/catch。
  *  - 在 inject=['webServer'] 后，ctx.webServer 直接可读；其他服务仍可能抛错需要兜底。
