@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-cli-hub",
-  "version": "0.1.0-rc.1",
-  "description": "DeepSeek Harness plugin: auto-discover local AI CLI tools, reuse their subscribed quota as Tool & Agent providers.",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness plugin: auto-scans 33+ local AI CLIs and reuses their subscribed quotas as Tool & Agent providers. | 自动扫描本机 33+ AI CLI，复用已订阅额度作为 DSH Tool & Agent。",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -10,7 +10,8 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.cjs"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./bundle/index.yml": "./bundle/index.yml",
@@ -21,20 +22,39 @@
     "!dist/tests/**",
     "bundle",
     "cordis.patch.yml",
-    "README.md"
+    "README.md",
+    "README.en.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
+    "deepseek",
     "cordis",
     "cli",
+    "ai-cli",
     "agent",
+    "multi-agent",
     "quota",
-    "multi-agent"
+    "adapter",
+    "tool",
+    "claude",
+    "codex",
+    "gemini",
+    "ollama"
   ],
   "author": "dsh-plugin-cli-hub contributors",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/{YOUR_GITHUB_USERNAME}/dsh-plugin-cli-hub.git"
+  },
+  "homepage": "https://github.com/{YOUR_GITHUB_USERNAME}/dsh-plugin-cli-hub#readme",
+  "bugs": {
+    "url": "https://github.com/{YOUR_GITHUB_USERNAME}/dsh-plugin-cli-hub/issues"
+  },
   "engines": {
     "node": ">=18.18"
   },
@@ -51,6 +71,7 @@
     "lint": "oxlint src tests",
     "test": "vitest run",
     "test:watch": "vitest",
+    "prepack": "pnpm build && pnpm test",
     "prepublishOnly": "pnpm build"
   },
   "peerDependencies": {

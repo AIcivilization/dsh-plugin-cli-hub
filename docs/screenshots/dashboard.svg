@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="480" rx="12" fill="url(#g)"/>
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial" text-anchor="middle" fill="#fff">
+    <text x="400" y="160" font-size="64" font-weight="700">📊 Dashboard</text>
+    <text x="400" y="220" font-size="22" opacity="0.9">dsh-plugin-cli-hub — Overview</text>
+    <g font-size="18" opacity="0.85">
+      <text x="400" y="300">33 adapters · 20+ discovered · 14 authenticated</text>
+      <text x="400" y="330">$356.42 / $512.00 quota · 30.4% remaining</text>
+      <text x="400" y="360">Last scan: 2 minutes ago</text>
+    </g>
+    <rect x="260" y="395" width="280" height="42" rx="8" fill="#0f172a" opacity="0.7"/>
+    <text x="400" y="423" font-size="16" fill="#fbbf24">Screenshot placeholder · replace with real UI</text>
+  </g>
+</svg>

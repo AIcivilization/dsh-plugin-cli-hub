@@ -1,0 +1,53 @@
+name: ✨ Feature Request（功能/新 adapter 提议）
+description: "提议一个新功能、新 adapter、或是对现有功能的改进建议。"
+labels: ["enhancement", "triage"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 类型
+      options:
+        - "新增一个 AI CLI adapter（A 类：商业云端 CLI）"
+        - "新增一个 AI CLI adapter（B-E 类：IDE/本地/开源/通用）"
+        - "Scanner：要支持一种新的扫描源"
+        - "QuotaManager：某 CLI 要加原生额度查询"
+        - "Web UI 改进"
+        - "DSH CLI 子命令新增"
+        - "文档 / README 改进"
+        - "其他（请在下方详细描述）"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你的用例是什么？请描述要解决的问题或痛点
+      description: "例如：本机装了 xx-ai CLI 有额度，但 cli-hub 扫不到 / 调不到。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 你希望怎样解决？
+      description: "描述理想行为。如果是新 adapter，请提供 CLI 官网 / GitHub URL。"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你考虑过哪些替代方案？
+      description: "（可选）为什么那些方案不行。"
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充上下文 / 截图 / 参考链接
+      description: |
+        如：`xx --version` 的输出；官方文档链接；一份 `xx --help` 的完整文本；
+        一张 Web UI 截图说明按钮应该放哪；等等。信息越多越快做。
+    validations:
+      required: false

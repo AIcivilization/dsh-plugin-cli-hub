@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06b6d4"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="480" rx="12" fill="url(#g)"/>
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial" text-anchor="middle" fill="#fff">
+    <text x="400" y="120" font-size="54" font-weight="700">🤖 Agent Sessions</text>
+    <text x="400" y="165" font-size="21" opacity="0.95">stream-json · line-based · stdio-jsonrpc</text>
+    <g font-size="15" opacity="0.95">
+      <g>
+        <rect x="80" y="200" width="640" height="68" rx="10" fill="#0f172a" opacity="0.55"/>
+        <text x="110" y="228" text-anchor="start" font-weight="700">session_01 · claude-code-agent (stream-json)</text>
+        <text x="110" y="250" text-anchor="start">status: RUNNING · 12 turns · pid 42183 · started 3 min ago · ready</text>
+      </g>
+      <g>
+        <rect x="80" y="280" width="640" height="68" rx="10" fill="#0f172a" opacity="0.55"/>
+        <text x="110" y="308" text-anchor="start" font-weight="700">session_02 · snow-ai-repl (line-based)</text>
+        <text x="110" y="330" text-anchor="start">status: IDLE · 6 turns · pid 43021 · 9 min uptime</text>
+      </g>
+      <g>
+        <rect x="80" y="360" width="640" height="68" rx="10" fill="#0f172a" opacity="0.3"/>
+        <text x="110" y="388" text-anchor="start" font-weight="700" opacity="0.75">session_03 · kimi-agent (stdio-jsonrpc)</text>
+        <text x="110" y="410" text-anchor="start" opacity="0.75">status: STOPPED · 4 turns · exit 0</text>
+      </g>
+    </g>
+  </g>
+</svg>

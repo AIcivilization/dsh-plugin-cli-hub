@@ -1,5 +1,7 @@
 # dsh-plugin-cli-hub
 
+> Language: **中文** | [English](./README.en.md)
+>
 > **DeepSeek Harness (DSH) 插件**：自动扫描本机已安装的各种 AI CLI 工具，把它们已经订阅的额度统一接入 DSH，作为 **Tool 模式** 和 **Agent 模式** 两种能力暴露给 DSH Agent 复用，免去重复申请 API Key、重复购买额度的麻烦。
 
 - DSH profile：`web`
@@ -8,6 +10,8 @@
 - License：MIT
 - 内置 adapter 数量：**33 个**（覆盖主流商业 CLI + 开源 CLI + 本地模型 CLI）
 - 本机实测命中：**20+ 个**（取决于用户实际安装情况）
+- npm：[npmjs.com/package/dsh-plugin-cli-hub](https://www.npmjs.com/package/dsh-plugin-cli-hub)
+- GitHub Topics：`dsh-plugin`, `deepseek-harness`, `ai-cli`, `tools`, `agent`
 
 ---
 
@@ -402,6 +406,18 @@ curl -X POST http://127.0.0.1:3080/cli-hub/api/tools/exec \
 ---
 
 ## Web UI 使用指南
+
+### Web UI 预览
+
+> ⚠️ 以下为 **SVG 占位图**（用于 README 首屏展示结构）。真实截图请在 DSH 中运行插件后手动替换 `docs/screenshots/*.png`。
+
+| 概览 Dashboard | 已发现的 AI CLI | Adapter 开关 |
+|---|---|---|
+| ![Dashboard](docs/screenshots/dashboard.svg) | ![Discovered](docs/screenshots/discovered.svg) | ![Adapters](docs/screenshots/adapters.svg) |
+
+| 额度监控 | 可用工具列表 | Agent 会话管理 |
+|---|---|---|
+| ![Quota](docs/screenshots/quota.svg) | ![Tools](docs/screenshots/tools.svg) | ![Agents](docs/screenshots/agents.svg) |
 
 Web UI 三条挂载路径（按顺序尝试，至少一条必生效）：
 

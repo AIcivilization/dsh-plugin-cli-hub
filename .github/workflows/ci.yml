@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test (Node ${{ matrix.node-version }} / ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # DSH 要求 Node >= 18.18。v0.1.0 主要验证 18 LTS / 20 LTS / 22 current。
+        node-version: ['18.18.2', '20.x', '22.x']
+        os: [ubuntu-latest, macos-14]     # macos-14 = arm64 M1, macos-13 = x64
+        exclude:
+          # Ubuntu 上 18/20/22 和 macOS 上 20.x 保留；macOS 上不测 18/22 矩阵太大，省 CI 时间
+          - os: macos-14
+            node-version: '18.18.2'
+          - os: macos-14
+            node-version: '22.x'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node ${{ matrix.node-version }}
+        id: setup-node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (pnpm typecheck)
+        run: pnpm typecheck
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify build artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls dist/
+          for f in dist/index.cjs dist/index.js dist/src/index.d.ts; do
+            if [[ ! -e "$f" ]]; then
+              echo "❌ missing artifact: $f"
+              exit 1
+            fi
+          done
+          echo "✅ build artifacts ok"
+
+      - name: Lint
+        run: pnpm lint || echo "⚠️ lint 失败但不阻断（v0.1.0 期间 oxlint rule 还在调整）"
+        continue-on-error: true
+
+      - name: Run unit tests
+        run: pnpm test --run --coverage
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ matrix.os }}-node${{ matrix.node-version }}
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Run e2e-smoke.mjs（非 DSH 环境，Scanner/Registry/Quota 联合）
+        shell: bash
+        run: |
+          set +e
+          node scripts/e2e-smoke.mjs
+          CODE=$?
+          set -e
+          if [[ $CODE -ne 0 ]]; then
+            # e2e-smoke 对环境（是否有实际 AI CLI）敏感，CI 一般没有，
+            # 所以只要 scanner / registry 初始化成功就不算 fail。
+            # 脚本自己的退出码约定：0 = 全绿；1 = 致命错误；其他 = 部分未扫到。
+            if [[ $CODE -eq 1 ]]; then
+              echo "❌ e2e-smoke 致命错误 exit 1"
+              exit 1
+            fi
+            echo "ℹ️ e2e-smoke exit $CODE（可能本机没有 AI CLI），视为非致命"
+          fi
+
+      - name: Dry-run npm pack（确保 tarball 里文件列表正常）
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACK_OUT=$(pnpm pack --dry-run 2>&1) || true
+          echo "$PACK_OUT"
+          # 必须包含的关键文件
+          for key in LICENSE README.md package.json dist/index.cjs dist/index.js; do
+            if ! echo "$PACK_OUT" | grep -qF "$key"; then
+              echo "❌ tarball 中没看到 $key"
+              exit 1
+            fi
+          done
+          echo "✅ tarball 关键文件检查 ok"

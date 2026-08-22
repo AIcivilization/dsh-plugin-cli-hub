@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="480" rx="12" fill="url(#g)"/>
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Helvetica, Arial" text-anchor="middle" fill="#fff">
+    <text x="400" y="140" font-size="56" font-weight="700">💸 Quota Monitor</text>
+    <text x="400" y="190" font-size="22" opacity="0.95">Cached + provider + local estimate</text>
+    <!-- progress bar background -->
+    <g transform="translate(80,240)">
+      <rect x="0" y="0" width="640" height="28" rx="14" fill="#ffffff" opacity="0.25"/>
+      <rect x="0" y="0" width="480" height="28" rx="14" fill="#fde68a"/>
+      <text x="320" y="20" font-size="15" fill="#78350f" font-weight="700">Total: 75% used · 25% remaining (across 33 adapters)</text>
+    </g>
+    <g font-size="15" opacity="0.95">
+      <text x="180" y="320">Claude Code     ████████░░ 82%</text>
+      <text x="180" y="345">Snow CLI        ████░░░░░░ 41%</text>
+      <text x="180" y="370">Kimi (Moonshot) █████░░░░░ 52%</text>
+      <text x="500" y="320">OfficeCLI       █████████░ 89%</text>
+      <text x="500" y="345">Ollama (local)  unlimited</text>
+      <text x="500" y="370">Gemini CLI      ███████░░░ 70%</text>
+    </g>
+    <rect x="260" y="425" width="280" height="30" rx="6" fill="#0f172a" opacity="0.7"/>
+    <text x="400" y="445" font-size="14" fill="#fbbf24">Screenshot placeholder · replace with real UI</text>
+  </g>
+</svg>
