@@ -8,7 +8,7 @@ Versioning rule during v0.x: **bugfix bumps patch, breaking change / feature bum
 
 ---
 
-## 0. 每次发布前你都要做的准备（一次性）
+## 0. One-time preparation before every release
 
 ### 0.1 Accounts
 
@@ -86,7 +86,7 @@ RELEASE-CHECKLIST v0.X.Y =======================================================
   [ ] 1.15 Annotated tag:
             git tag -a v0.X.Y -m "release v0.X.Y — 1-line summary"
 
-================================== 本地质量门到此结束 ==================================
+============================== END OF LOCAL QUALITY GATE ==============================
 
   [ ] 2.1 Create the empty PUBLIC GitHub repo (if this is the v0.1.0 first push):
             - Visit https://github.com/new
@@ -126,7 +126,7 @@ RELEASE-CHECKLIST v0.X.Y =======================================================
             - (do NOT attach binaries)
             - Click "Publish release".
 
-================================ GitHub 端到此结束，开始 npm 发布 ================================
+========================= END OF GITHUB SIDE; START npm PUBLISH =========================
 
   [ ] 3.1 Double-check npm whoami:
             npm whoami
@@ -143,7 +143,7 @@ RELEASE-CHECKLIST v0.X.Y =======================================================
             → See "Handling npm package-name collision" in §4 below, then redo 3.1–3.4
               with the scoped name.
 
-================================ npm 端到此结束，开始发布后验收 ================================
+====================== END OF npm SIDE; START POST-RELEASE CHECKS ======================
 
   [ ] 4.1 Channel-B install smoke (GitHub):
             bash scripts/release-smoke-install.sh \
@@ -164,7 +164,7 @@ RELEASE-CHECKLIST v0.X.Y =======================================================
         → https://www.npmjs.com/package/dsh-plugin-cli-hub
         → Description + README render correctly.
 
-================================ 验证到此结束，开始曝光/推广 ===================================
+===================== END OF VERIFICATION; START PROMOTION/EXPOSURE =====================
 
   [ ] 5.1 (Recommended) Open a DSH "Show and tell" Discussion post:
             - https://github.com/deepseek-ai/deepseek-harness/discussions/categories/show-and-tell
@@ -184,14 +184,14 @@ RELEASE-CHECKLIST v0.X.Y =======================================================
             - https://github.com/0xsline/awesome-deepseek-harness — open PR adding
               `- [dsh-plugin-cli-hub](https://github.com/<YOU>/dsh-plugin-cli-hub)`
               in the "Plugins" section.
-  [ ] 5.4 (Optional, after > 200 stars) Apply for "精选 / Featured" badge on
+  [ ] 5.4 (Optional, after > 200 stars) Apply for the "Featured" badge on
         deepseek-harness-plugin.com.
   [ ] 5.5 Check indexing over the next 3 days:
             [ ] http://dsh-plugins.top → search "cli-hub" / "quota"
             [ ] https://deepseek-harness-plugin.com/zh-CN/plugins/
             [ ] Install the dsh-market DSH plugin → search "cli-hub" inside DSH.
 
-================================ POST-RELEASE 跟进 =========================================
+================================== POST-RELEASE FOLLOW-UP ==================================
 
   [ ] 6.1 Bump package.json version to `0.X.(Y+1)-dev` so nightly builds don't collide
         with the release you just pushed. Do NOT tag this.
@@ -236,7 +236,7 @@ negative patterns BEFORE publishing.
 
 ```
 == summary: PASS=12 FAIL=0 ==
->> 全部通过 ✅
+>> All passed ✅
 ```
 
 ---

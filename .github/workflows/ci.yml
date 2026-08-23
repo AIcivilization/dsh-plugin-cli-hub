@@ -18,11 +18,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # DSH 要求 Node >= 18.18。v0.1.0 主要验证 18 LTS / 20 LTS / 22 current。
+        # DSH requires Node >= 18.18. v0.1.0 primarily validates 18 LTS / 20 LTS / 22 current.
         node-version: ['18.18.2', '20.x', '22.x']
         os: [ubuntu-latest, macos-14]     # macos-14 = arm64 M1, macos-13 = x64
         exclude:
-          # Ubuntu 上 18/20/22 和 macOS 上 20.x 保留；macOS 上不测 18/22 矩阵太大，省 CI 时间
+          # keep 18/20/22 on Ubuntu and 20.x on macOS; skipping 18/22 on macOS keeps the matrix small to save CI time
           - os: macos-14
             node-version: '18.18.2'
           - os: macos-14
@@ -67,7 +67,7 @@ jobs:
           echo "✅ build artifacts ok"
 
       - name: Lint
-        run: pnpm lint || echo "⚠️ lint 失败但不阻断（v0.1.0 期间 oxlint rule 还在调整）"
+        run: pnpm lint || echo "\u26a0\ufe0f lint failed but not blocking (oxlint rules still being tuned during v0.1.0)"
         continue-on-error: true
 
       - name: Run unit tests
@@ -82,7 +82,7 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Run e2e-smoke.mjs（非 DSH 环境，Scanner/Registry/Quota 联合）
+      - name: Run e2e-smoke.mjs (non-DSH env; Scanner/Registry/Quota combined)
         shell: bash
         run: |
           set +e
@@ -90,27 +90,27 @@ jobs:
           CODE=$?
           set -e
           if [[ $CODE -ne 0 ]]; then
-            # e2e-smoke 对环境（是否有实际 AI CLI）敏感，CI 一般没有，
-            # 所以只要 scanner / registry 初始化成功就不算 fail。
-            # 脚本自己的退出码约定：0 = 全绿；1 = 致命错误；其他 = 部分未扫到。
+            # e2e-smoke is sensitive to the environment (whether real AI CLIs exist); CI usually has none,
+            # so as long as scanner / registry initialize successfully it does not count as a failure.
+            # The script's own exit-code convention: 0 = all green; 1 = fatal; anything else = some CLIs not found.
             if [[ $CODE -eq 1 ]]; then
-              echo "❌ e2e-smoke 致命错误 exit 1"
+              echo "\u274c e2e-smoke fatal error (exit 1)"
               exit 1
             fi
-            echo "ℹ️ e2e-smoke exit $CODE（可能本机没有 AI CLI），视为非致命"
+            echo "\u2139\ufe0f e2e-smoke exited $CODE (this machine may have no AI CLIs); treated as non-fatal"
           fi
 
-      - name: Dry-run npm pack（确保 tarball 里文件列表正常）
+      - name: Dry-run npm pack (verify the tarball file list)
         shell: bash
         run: |
           set -euo pipefail
           PACK_OUT=$(pnpm pack --dry-run 2>&1) || true
           echo "$PACK_OUT"
-          # 必须包含的关键文件
+          # key files that must be present
           for key in LICENSE README.md package.json dist/index.cjs dist/index.js; do
             if ! echo "$PACK_OUT" | grep -qF "$key"; then
-              echo "❌ tarball 中没看到 $key"
+              echo "\u274c tarball missing $key"
               exit 1
             fi
           done
-          echo "✅ tarball 关键文件检查 ok"
+          echo "\u2705 tarball key-file check ok"

@@ -17,113 +17,114 @@ starting with `1.0.0`; during the `0.x` Developer Preview, breaking changes bump
 
 ### Added
 
-#### 1. 33 built-in AI CLI adapters（5 大类）
+#### 1. 33 built-in AI CLI adapters (5 categories)
 
-**A. 商业云端 AI CLI（10）**
+**A. Commercial cloud AI CLIs (10)**
 Claude Code, Kimi CLI (Moonshot), Snow CLI (Mistral/Snowflake AI), Gemini CLI,
 Groq CLI, OfficeCLI, Qwen CLI (Alibaba Tongyi), Doubao CLI (ByteDance),
 GLM CLI (Zhipu), MiniMax CLI.
 
-**B. IDE 内嵌 AI 入口 CLI（6）**
+**B. IDE-embedded AI entry CLIs (6)**
 Codex CLI (Trae), Copilot CLI, Windsurf CLI, Cursor CLI, Cline CLI, Devin Desktop CLI.
 
-**C. 本地模型网关 CLI（5）**
+**C. Local model / gateway CLIs (5)**
 Ollama, llama.cpp, LM Studio CLI, Jan CLI, LiteLLM Proxy CLI.
 
-**D. 开源 Agent / Autonomous Coding CLI（8）**
-Aider, Continue.dev, OpenHands (原 OpenDevin) CLI, Goose CLI (Block),
+**D. Open-source Agent / autonomous coding CLIs (8)**
+Aider, Continue.dev, OpenHands (formerly OpenDevin) CLI, Goose CLI (Block),
 Smol Developer, OpenClaudia, Paperclip AI, FreeBuf CLI.
 
-**E. 通用 LLM Chat CLI（4）**
+**E. General-purpose LLM chat CLIs (4)**
 tgpt, aichat (Sigoden), LLM CLI (Simon Willison), Chatblade,
 Soul5 CLI, Junie CLI, CatPaw CLI.
 
-#### 2. Scanner — 三层自动发现，覆盖 6 类扫描源
+#### 2. Scanner — three-layer auto-discovery covering 6 scan sources
 
-- `L1` 按可执行文件名指纹匹配；`L2` 版本号提取；`L3` 登录态验证。
-- 扫描源：`$PATH`、用户常用 bin 目录（~/.local/bin, ~/.cargo/bin, ~/.bun/bin 等）、
-  macOS App Bundle `/Applications/*.app/Contents/**/bin`、系统包管理器 bin、
-  npm global、Python user scripts。
-- 解决 macOS launchd 进程 PATH 被重置导致"扫不到 brew/bin"的经典问题。
+- `L1` fingerprint match on executable names; `L2` version extraction; `L3` login-state verification.
+- Scan sources: `$PATH`, common user bin dirs (~/.local/bin, ~/.cargo/bin, ~/.bun/bin, etc.),
+  macOS app bundles `/Applications/*.app/Contents/**/bin`, system package-manager bins,
+  npm global, Python user scripts.
+- Fixes the classic macOS problem where launchd resets PATH and brew/homebrew bins cannot be found.
 
-#### 3. QuotaManager — 额度查询 + 本地估算
+#### 3. QuotaManager — quota query + local estimation
 
-- 四种查询方式：`command` / `http` / `file` / `unknown`（fallback）。
-- 每工具调用、每 Agent turn 按估算函数累计 used；TTL + 阈值告警。
-- 输出：`source / currency / total / used / remaining / period / refreshedAt / breakdown`。
+- Four query methods: `command` / `http` / `file` / `unknown` (fallback).
+- Per tool call and per Agent turn, `used` accumulates via estimator functions; TTL cache + threshold warnings.
+- Output shape: `source / currency / total / used / remaining / period / refreshedAt / breakdown`.
 
-#### 4. ToolGateway — 所有已发现 CLI 自动注册为 DSH ctx.tools
+#### 4. ToolGateway — all discovered CLIs auto-registered as DSH ctx.tools
 
-- **新增 `kind: 'argv'` 安全命令映射**（推荐），按数组传参数，天然避免引号/空格注入；
-  同时保留 `kind: 'template'` 向后兼容（日志 DEPRECATE 警告，v0.2.0 移除）。
-- 对所有渲染路径做 `NUL 字节 × 100,000 字符上限` 安全断言。
-- Sandbox strict / relaxed 两级；连续 N 次失败 → failureCooldown 强制冷却。
-- 调用历史落地 + 事件总线 `tool-called / tool-succeeded / tool-failed`。
+- **New `kind: 'argv'` safe command mapping (recommended)** passes arguments as an array,
+  inherently avoiding quote/space injection; `kind: 'template'` remains for backward
+  compatibility (DEPRECATE log warning, removal in v0.2.0).
+- Safety assertions on all render paths: NUL bytes rejected and a 100,000-character limit.
+- Two sandbox levels, strict / relaxed; N consecutive failures trigger a failureCooldown.
+- Call history persistence + event bus `tool-called / tool-succeeded / tool-failed`.
 
-#### 5. AgentGateway — 5 种协议 spawn 独立子 Agent
+#### 5. AgentGateway — spawn standalone sub-agents over 5 protocols
 
 - `acp / mcp-stdio / stdio-jsonrpc / line-based / stream-json`。
-- `readyPattern` 等待 ready banner，graceful shutdown（SIGINT/SIGTERM + grace ms）。
-- 每个 adapter 一个 singleton（默认）。Agent 元数据：displayName / avatarEmoji /
-  strengths / shareDshTools。
+- `readyPattern` waits for the ready banner; graceful shutdown (SIGINT/SIGTERM + grace ms).
+- One singleton per adapter (default). Agent metadata: displayName / avatarEmoji /
+  strengths / shareDshTools.
 
-#### 6. Web UI — 6 Section + SSE + 12 HTTP endpoints
+#### 6. Web UI — 6 sections + SSE + 12 HTTP endpoints
 
-- 概览 / 已发现 CLI / Adapter 开关 / 额度监控 / 工具列表 / Agent 会话管理。
-- SSE 事件流用于推送扫描进度、额度变更、调用历史。
-- 挂载路径：DSH settings 卡片、独立 `/cli-hub` 路由、REST `/api/cli-hub/v1/*`。
+- Overview / discovered CLIs / adapter toggles / quota monitoring / tool list / agent session management.
+- SSE event stream pushes scan progress, quota changes and call history.
+- Mount points: DSH settings card, standalone `/cli-hub` route, REST `/api/cli-hub/v1/*`.
 
-#### 7. DSH CLI 子命令
+#### 7. DSH CLI subcommands
 
 ```bash
-dsh cli-hub scan [l1|l2|l3]    # 触发扫描
-dsh cli-hub list               # 列出 adapter / 开关
+dsh cli-hub scan [l1|l2|l3]    # trigger a scan
+dsh cli-hub list               # list adapters / toggles
 dsh cli-hub enable <id> | disable <id>
 dsh cli-hub quota [--adapter <id>]
 dsh cli-hub tool exec <toolName> '<json>'
 dsh cli-hub agent start <id> | stop <id> | list
 ```
 
-#### 8. 脚本
+#### 8. Scripts
 
-- `scripts/show-quota.mjs` — 不依赖 DSH，独立扫描 + 输出额度状态（带颜色）。
-- `scripts/e2e-smoke.mjs` / `smoke-claude-agent.mjs` — 端到端冒烟。
-- `scripts/install-to-dsh-web.sh` — 一键把本插件塞进本机 `~/.dsh/profiles/web`。
-- `scripts/release-smoke-install.sh` — 发布前 file/GitHub/npm 三通道安装验证。
+- `scripts/show-quota.mjs` — scans and prints quota status independently of DSH (with colors).
+- `scripts/e2e-smoke.mjs` / `smoke-claude-agent.mjs` — end-to-end smoke tests.
+- `scripts/install-to-dsh-web.sh` — one command to install this plugin into the local `~/.dsh/profiles/web`.
+- `scripts/release-smoke-install.sh` — pre-release install verification over the file/GitHub/npm channels.
 
-#### 9. 文档 / 发布元数据
+#### 9. Docs / release metadata
 
-- README（中文）v0.1.0 重写，含 6 大 feature + 33 适配器表 + 架构 + FAQ + Roadmap。
-- package.json 补齐 `repository / homepage / bugs / exports.default / files / keywords`。
-- `LICENSE`（MIT）+ `THIRD_PARTY_NOTICES.md`（30+ 厂商商标免责）。
-- CHANGELOG / CONTRIBUTING / RELEASE-PLAN / RELEASING 发布清单。
+- README rewritten for v0.1.0 with the 6 major features + 33-adapter table + architecture + FAQ + Roadmap.
+- package.json filled in with `repository / homepage / bugs / exports.default / files / keywords`.
+- `LICENSE` (MIT) + `THIRD_PARTY_NOTICES.md` (trademark disclaimers for 30+ vendors).
+- CHANGELOG / CONTRIBUTING / RELEASE-PLAN / RELEASING release checklists.
 
 ### Testing
 
-- 54 个 vitest 单测（含 Scanner 6 类扫描源、QuotaManager、ToolGateway 安全、
-  AgentGateway 5 协议、Adapter 注册校验），均通过。
+- 54 vitest unit tests (covering the scanner's 6 scan sources, QuotaManager, ToolGateway
+  safety, AgentGateway's 5 protocols, adapter registration validation), all passing.
 - `pnpm typecheck` 0 errors。
-- Gateway argv 安全单测：双引号/分号注入、含空格路径、pair 跳过、NUL + 超长拒绝。
+- Gateway argv safety unit tests: double-quote/semicolon injection, paths with spaces, pair skipping, NUL + over-long rejection.
 
-### Known Issues（本版本存在、v0.2.0 计划修复）
+### Known Issues (present in this release; fixes planned for v0.2.0)
 
-1. **27/33 个 adapter 的 Tool 模式仍在使用 `kind: 'template'`**：已经在 types.ts 标记
-   DEPRECATE，v0.2.0 全部迁移到 `kind: 'argv'`（核心 6 个已迁移）。
-2. **Quota 查询覆盖率**：33 个 adapter 中仅 Claude Code、Snow CLI、Kimi、OfficeCLI、
-   Gemini CLI 配了真实 provider 查询；其余走 estimate 累计（estimatePerToolCall /
-   estimatePerAgentTurn）或 `unknown`。
-3. **Agent 端到端验证**：目前只有 claude-code / snow-cli 两个 Agent 模式经过真环境
-   spawn + send + recv + shutdown 验证；其余 9 个声明了 agent 能力的 adapter 按协议
-   写了 spawn argsTemplate，但未做真人环境验证。
-4. **平台支持**：macOS (arm64 + x64) 验证过；Linux 理论兼容（依赖 POSIX execFile 和
-   ~/.config 路径），未经 CI 实跑；Windows 不在 v0.1.0 支持范围内。
-5. **npm package name 冲突风险**：当前 name=`dsh-plugin-cli-hub`。若 `pnpm publish`
-   报告 403 name taken，立刻改 scoped：`@<gh-user>/dsh-plugin-cli-hub`，同时同步
-   README 安装命令、package.json `files` 和 cordis.patch.yml `name`。
+1. **27/33 adapters still use `kind: 'template'` in Tool mode**: already marked DEPRECATE
+   in types.ts; v0.2.0 migrates everything to `kind: 'argv'` (the core 6 are migrated).
+2. **Quota query coverage**: only Claude Code, Snow CLI, Kimi, OfficeCLI and Gemini CLI out of
+   the 33 adapters have real provider queries; the rest accumulate via estimates
+   (estimatePerToolCall / estimatePerAgentTurn) or report `unknown`.
+3. **Agent end-to-end verification**: so far only the claude-code / snow-cli Agent modes have been
+   verified against a real environment (spawn + send + recv + shutdown); the other 9 adapters that
+   declare agent capability have protocol-appropriate spawn argsTemplate but no real-environment verification.
+4. **Platform support**: verified on macOS (arm64 + x64); Linux is compatible in theory (relies on
+   POSIX execFile and ~/.config paths) but not CI-tested; Windows is out of scope for v0.1.0.
+5. **npm package name collision risk**: current name=`dsh-plugin-cli-hub`. If `pnpm publish`
+   reports 403 name taken, switch to the scoped name immediately: `@<gh-user>/dsh-plugin-cli-hub`,
+   and update the README install commands, package.json `files`, and cordis.patch.yml `name` accordingly.
 
 ---
 
-## [0.1.0-rc.1] — UNRELEASED（Pre-release internal）
+## [0.1.0-rc.1] — UNRELEASED (pre-release internal)
 
 All changes above were developed internally and consolidated as `v0.1.0` for the first
 public release. No prior public version was published.

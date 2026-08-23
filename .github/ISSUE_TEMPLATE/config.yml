@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
-  - name: DSH 官方讨论区（中文/英文都可）
+  - name: Official DSH discussions (Chinese or English)
     url: https://github.com/deepseek-ai/deepseek-harness/discussions
-    about: "关于 DSH 本身的问题，请到官方 Discussions 提问"
-  - name: 使用问题 & 中文社区交流
+    about: "For questions about DSH itself, please ask in the official Discussions"
+  - name: Usage questions & community chat
     url: https://github.com/dsh-market/dsh-market
-    about: "dsh-market 社区——DSH 插件发现与交流"
+    about: "The dsh-market community — DSH plugin discovery and discussion"

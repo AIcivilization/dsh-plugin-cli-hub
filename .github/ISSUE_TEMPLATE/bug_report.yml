@@ -1,29 +1,29 @@
-name: 🐛 Bug Report（错误报告）
-description: "报告一个导致功能不正常、崩溃、或行为不符合 README 描述的问题。"
+name: "🐛 Bug Report"
+description: "Report something that malfunctions, crashes, or behaves differently from the README."
 labels: ["bug", "triage"]
 body:
   - type: markdown
     attributes:
       value: |
-        感谢提交 bug！请尽量填完以下字段，越详细我们越快能定位。
+        Thanks for filing a bug! Fill in as many fields below as you can — the more detail, the faster we can pinpoint it.
 
   - type: checkboxes
     id: confirm-basic
     attributes:
-      label: 基本确认
+      label: Basic checks
       options:
-        - label: "我已尝试重新安装本插件：`dsh plugin remove dsh-plugin-cli-hub` + 重新 add"
+        - label: "I tried reinstalling the plugin: `dsh plugin remove dsh-plugin-cli-hub` + re-add"
           required: true
-        - label: "我确认我的 DSH / dsh-plugin-cli-hub / Node.js 都是发布计划要求的版本（见下）"
+        - label: "I confirm my DSH / dsh-plugin-cli-hub / Node.js versions meet the requirements (see below)"
           required: true
-        - label: "我已看过 [Troubleshooting（README FAQ 章节）] 并确认问题不在那里"
+        - label: "I checked the Troubleshooting (README FAQ) section and confirmed my issue is not covered there"
           required: false
 
   - type: input
     id: plugin-version
     attributes:
-      label: "dsh-plugin-cli-hub 版本"
-      description: "例如 0.1.0。从 `cat ~/.dsh/profiles/<你的profile>/node_modules/dsh-plugin-cli-hub/package.json | grep version` 获取。"
+      label: "dsh-plugin-cli-hub version"
+      description: "e.g. 0.1.0. Get it via `cat ~/.dsh/profiles/<your-profile>/node_modules/dsh-plugin-cli-hub/package.json | grep version`."
       placeholder: "0.1.0"
     validations:
       required: true
@@ -31,7 +31,7 @@ body:
   - type: input
     id: dsh-version
     attributes:
-      label: "DSH 版本"
+      label: "DSH version"
       placeholder: "0.1.0-rc.8"
     validations:
       required: true
@@ -39,7 +39,7 @@ body:
   - type: input
     id: node-version
     attributes:
-      label: "Node.js 版本"
+      label: "Node.js version"
       placeholder: "v20.14.0"
     validations:
       required: true
@@ -47,68 +47,68 @@ body:
   - type: dropdown
     id: os
     attributes:
-      label: 操作系统
+      label: Operating system
       options:
         - "macOS arm64 (Apple Silicon)"
         - "macOS x64 (Intel)"
         - "Linux (x64)"
         - "Linux (arm64)"
         - "Windows (WSL2)"
-        - "Windows (原生)"
-        - "其他（请在下方说明）"
+        - "Windows (native)"
+        - "Other (explain below)"
     validations:
       required: true
 
   - type: dropdown
     id: install-channel
     attributes:
-      label: 安装方式
-      description: "你是用哪种方式装的插件？"
+      label: Install channel
+      description: "How did you install the plugin?"
       options:
-        - "`dsh plugin add file:///path` （本地源码）"
-        - "`dsh plugin add github:<user>/dsh-plugin-cli-hub` （GitHub）"
-        - "`dsh plugin add npm:dsh-plugin-cli-hub` （npm）"
-        - "通过 dsh-market 可视化插件商城"
-        - "其他（如 scripts/install-to-dsh-web.sh）"
+        - "`dsh plugin add file:///path` (local source)"
+        - "`dsh plugin add github:<user>/dsh-plugin-cli-hub` (GitHub)"
+        - "`dsh plugin add npm:dsh-plugin-cli-hub` (npm)"
+        - "Via the visual dsh-market plugin marketplace"
+        - "Other (e.g. scripts/install-to-dsh-web.sh)"
     validations:
       required: true
 
   - type: textarea
     id: steps
     attributes:
-      label: 复现步骤
-      description: "越具体越好，最好复制粘贴命令。"
+      label: Reproduction steps
+      description: "Be as specific as possible; paste commands verbatim."
       placeholder: |
-        1. 执行 `dsh --profile web ...`
-        2. 在 DSH 里说 "让 cli-hub 扫一下" ……
-        3. 然后……
+        1. Run `dsh --profile web ...`
+        2. Tell DSH "have cli-hub run a scan" ...
+        3. Then ...
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: 预期行为
-      description: "描述你预期应该发生什么。"
+      label: Expected behavior
+      description: "Describe what you expected to happen."
     validations:
       required: true
 
   - type: textarea
     id: actual
     attributes:
-      label: 实际行为
-      description: "实际发生了什么？如果有错误提示请原封不动复制。"
+      label: Actual behavior
+      description: "What actually happened? Paste any error message verbatim."
     validations:
       required: true
 
   - type: textarea
     id: logs
     attributes:
-      label: DSH 日志（关键片段）
+      label: DSH logs (relevant excerpt)
       description: |
-        请粘贴 `grep -nE '(cli-hub|ERROR|WARN)' <DSH 日志文件路径>` 的输出。
-        不知道日志在哪？通常在：
-          - macOS: `~/Library/Logs/dsh/` 或 `~/.dsh/profiles/<profile>/*.log`
+        Paste the output of `grep -nE '(cli-hub|ERROR|WARN)' <path to your DSH log file>`.
+        Not sure where the logs are? Usually:
+          - macOS: `~/Library/Logs/dsh/` or `~/.dsh/profiles/<profile>/*.log`
           - Linux: `~/.dsh/profiles/<profile>/*.log`
       render: shell
     validations:
@@ -117,5 +117,5 @@ body:
   - type: textarea
     id: extra
     attributes:
-      label: 其他可能相关的信息
-      description: "例如：你本机装了多少 AI CLI、有没有特殊的 PATH 配置、用的是哪家的 shell (zsh/bash/fish)、是不是在 Docker 里跑等。"
+      label: Other possibly relevant information
+      description: "e.g.: how many AI CLIs installed locally, any unusual PATH configuration, which shell you use (zsh/bash/fish), whether this runs inside Docker, etc."
