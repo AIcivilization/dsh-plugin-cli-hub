@@ -2,6 +2,8 @@
 
 > Language: [中文（简体）](./README.md) | **English**
 >
+> 🚀 **New here?** Follow the hands-on guide: **[USAGE.md](./USAGE.md)** — install, first scan, and your first tool call in ~5 minutes.
+>
 > A **DeepSeek Harness (DSH)** plugin that automatically discovers every AI CLI you have
 > installed on your local machine and reuses their subscribed quotas inside DSH as
 > **Tool-mode** and **Agent-mode** capabilities — so you never have to copy/paste an

@@ -2,6 +2,8 @@
 
 > Language: **中文** | [English](./README.en.md)
 >
+> 🚀 **第一次用？** 看手把手教程：**[USAGE.md](./USAGE.md)**（英文为主、含中文对照）——5 分钟完成安装、首次扫描和第一次工具调用。
+>
 > **DeepSeek Harness (DSH) 插件**：自动扫描本机已安装的各种 AI CLI 工具，把它们已经订阅的额度统一接入 DSH，作为 **Tool 模式** 和 **Agent 模式** 两种能力暴露给 DSH Agent 复用，免去重复申请 API Key、重复购买额度的麻烦。
 
 - DSH profile：`web`
