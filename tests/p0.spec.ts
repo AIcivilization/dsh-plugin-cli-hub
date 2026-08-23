@@ -11,7 +11,7 @@ import { defineCliAdapter } from '../src/adapters/define';
 import { BUILTIN_ADAPTERS } from '../src/adapters/builtin';
 
 // ============================================================
-// Helper: 假 DSH Context（提供最小 storage/logger 实现）
+// Helper: fake DSH Context (minimal storage/logger implementation)
 // ============================================================
 function makeFakeCtx() {
   const mem: Record<string, any> = {};
@@ -27,11 +27,11 @@ function makeFakeCtx() {
       warn: (...args: any[]) => console.warn(`[${scope}]`, ...args),
       error: (...args: any[]) => console.error(`[${scope}]`, ...args),
     }),
-    // 空的 tools（不真实注册，模拟即可）
+    // empty tools (not really registered; a stub is enough)
     tools: null as any,
     subprocess: {
       async exec(cmd: string, args: string[], _opts: any = {}) {
-        // 默认假实现：cmd == "true" 才通过
+        // default stub: echo returns its args; anything else exits 0
         if (cmd === 'echo') return { stdout: args.join(' '), stderr: '', exitCode: 0 };
         return { stdout: '', stderr: '', exitCode: 0 };
       },
@@ -43,7 +43,7 @@ function makeFakeCtx() {
 }
 
 // ============================================================
-// 1. Registry 测试
+// 1. Registry tests
 // ============================================================
 describe('Registry', () => {
   let reg: RegistryServiceImpl;
@@ -51,13 +51,13 @@ describe('Registry', () => {
     reg = new RegistryServiceImpl(makeFakeCtx(), { enabledOverrides: {} });
   });
 
-  it('注册内置 adapter 全部合法', () => {
+  it('registers all builtin adapters without throwing', () => {
     for (const a of BUILTIN_ADAPTERS) expect(() => reg.register(a as any)).not.toThrow();
     expect(reg.size).toBe(BUILTIN_ADAPTERS.length);
   });
 
-  it('adapter id 非法直接抛错', () => {
-    // defineCliAdapter 在构造时就抛错（id 不合法）
+  it('throws on invalid adapter id', () => {
+    // defineCliAdapter throws at construction time (invalid id)
     expect(() => defineCliAdapter({
       id: 'BAD ID!',
       name: 'X',
@@ -72,9 +72,9 @@ describe('Registry', () => {
       }] },
       quota: { method: { kind: 'unknown' } },
       healthProbe: null,
-    })).toThrow(/id.*非法/)
+    })).toThrow(/invalid id/)
 
-    // 合法 id 能通过 defineCliAdapter，register 也不抛
+    // valid id passes defineCliAdapter; register must not throw either
     const good = defineCliAdapter({
       id: 'good-id',
       name: 'Good',
@@ -93,7 +93,7 @@ describe('Registry', () => {
     expect(() => reg.register(good as any)).not.toThrow();
   });
 
-  it('defaultEnabled=false 时默认禁用，override 可以强开', () => {
+  it('defaultEnabled=false disables by default; override can force-enable', () => {
     const r = new RegistryServiceImpl(makeFakeCtx(), { enabledOverrides: { off: true } });
     const off = defineCliAdapter({
       id: 'off', name: 'Off', description: 'd',
@@ -107,7 +107,7 @@ describe('Registry', () => {
       }] },
     });
     r.register(off);
-    // override=true 覆盖 defaultEnabled=false
+    // override=true overrides defaultEnabled=false
     expect(r.isEnabled('off')).toBe(true);
 
     const r2 = new RegistryServiceImpl(makeFakeCtx(), { enabledOverrides: {} });
@@ -117,24 +117,24 @@ describe('Registry', () => {
     expect(r2.isEnabled('off')).toBe(true);
   });
 
-  it('list 过滤 capability 模式', () => {
+  it('listAdapters filters by capability mode', () => {
     for (const a of BUILTIN_ADAPTERS) reg.register(a as any);
     const toolsOnly = reg.listAdapters({ mode: 'tool' });
     const agentOnly = reg.listAdapters({ mode: 'agent' });
     expect(toolsOnly.length).toBeGreaterThanOrEqual(1);
-    // kimi-cli 和 claude-code 都声明了 agent，所以 agentOnly 应 ≥ 2
+    // kimi-cli and claude-code both declare agents, so agentOnly should be >= 2
     expect(agentOnly.length).toBeGreaterThanOrEqual(2);
   });
 });
 
 // ============================================================
-// 2. Scanner 测试（mock PATH）
+// 2. Scanner tests (mocked PATH)
 // ============================================================
 describe('Scanner', () => {
-  it('L1 扫描：在临时 PATH 目录放个假 snow，能被 snow-cli adapter 匹配到', async () => {
+  it('L1 scan: a fake snow binary in a temp PATH dir is matched by the snow-cli adapter', async () => {
     const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-hub-scan-'));
     try {
-      // 放一个可执行的假 snow 脚本
+      // drop an executable fake snow script into the temp dir
       const fakeSnow = path.join(tmpdir, 'snow');
       fs.writeFileSync(
         fakeSnow,
@@ -163,7 +163,7 @@ describe('Scanner', () => {
     }
   }, 15_000);
 
-  it('L2 版本探测能从 --version 输出版本号', async () => {
+  it('L2 version probe extracts the version from --version output', async () => {
     const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-hub-scan-'));
     try {
       const fake = path.join(tmpdir, 'snow');
@@ -172,7 +172,7 @@ describe('Scanner', () => {
       process.env.PATH = tmpdir + path.delimiter + originalPath;
       try {
         const ctx = makeFakeCtx();
-        // 给 ctx.subprocess 一个真实执行的实现（用 node 实际跑，测 L2）
+        // give ctx.subprocess a real exec implementation (actually spawns node; exercises L2)
         ctx.subprocess.exec = async (file: string, args: string[]) => {
           return new Promise(resolve => {
             const { spawn } = require('node:child_process');
@@ -203,7 +203,7 @@ describe('Scanner', () => {
 });
 
 // ============================================================
-// 3. ToolGateway 测试：模板渲染 + shell 安全转义
+// 3. ToolGateway tests: template rendering + shell-safe escaping
 // ============================================================
 describe('ToolGateway', () => {
   function makeSetup() {
@@ -216,12 +216,12 @@ describe('ToolGateway', () => {
     return { ctx, reg, quota, storage, gw: gw as ToolGatewayImpl };
   }
 
-  it('safeEscape 防御注入字符', () => {
-    // 直接测导出的内部行为：用一个 template resolver adapter 的方式调 _renderCommand（反射）
-    // 这里我们直接构造一个 RegisteredTool 喂给 private 方法
+  it('safeEscape defends against injection characters', () => {
+    // Test the internal behavior directly: call _renderCommand via reflection on a template-mapping adapter
+    // We construct a RegisteredTool-shaped object and feed it to the private method
     const { gw } = makeSetup() as any;
 
-    // 一个简单的假 adapter：echo "{{bad}}"
+    // simple fake adapter: echo {{prompt}}
     const rt = {
       adapterId: 'test',
       execPath: '/bin/echo',
@@ -230,15 +230,15 @@ describe('ToolGateway', () => {
       },
     } as any;
     const rendered = gw._renderCommand(rt, { prompt: "hi && rm -rf /" }, { workspace: '/tmp', homedir: '/tmp', env: {} });
-    // execFile 语义："hi && rm -rf /" 必须作为**单个字面量参数**出现在 args 数组中，
-    // 不经过 shell 解析，所以 && 虽然在字符串里但永远不会被 shell 执行。
+    // execFile semantics: "hi && rm -rf /" must appear in args as a **single literal argument**,
+    // bypassing the shell entirely, so && never gets interpreted even though it is inside the string.
     expect(rendered.args).toContain('hi && rm -rf /');
-    // 没有被拆分成多个参数（没有经过 shell tokenize）
+    // not split into multiple args (no shell tokenization happened)
     expect(rendered.args.length).toBe(1);
     expect(rendered.cmd).toBe('/bin/echo');
   });
 
-  it('argv 模式：prompt 含双引号/分号不会被截断，且空格不拆参数', () => {
+  it('argv mode: prompt with double quotes/semicolons is not truncated; spaces do not split args', () => {
     const { gw } = makeSetup() as any;
     const rt = {
       adapterId: 'argv-test',
@@ -260,7 +260,7 @@ describe('ToolGateway', () => {
     const prompt = 'hello "world" ; cat /etc/passwd && rm -rf /';
     const r = gw._renderCommand(rt, { prompt, language: 'sh' }, { workspace: '/tmp', homedir: '/tmp' });
     expect(r.cmd).toBe('/tmp/fake-copilot');
-    // prompt 必须完整保留，作为独立 argv，不被切分
+    // prompt must survive intact as one standalone argv entry
     expect(r.args).toEqual([
       'suggest',
       'hello "world" ; cat /etc/passwd && rm -rf /',
@@ -270,7 +270,7 @@ describe('ToolGateway', () => {
     ]);
   });
 
-  it('argv 模式：空格路径不被拆分成多个参数', () => {
+  it('argv mode: a path with spaces stays a single argument', () => {
     const { gw } = makeSetup() as any;
     const rt = {
       adapterId: 'argv-spaces',
@@ -287,12 +287,12 @@ describe('ToolGateway', () => {
       },
     } as any;
     const r = gw._renderCommand(rt, { file: '/Users/我的文档/report 2026.pdf' }, { workspace: '/tmp', homedir: '/tmp' });
-    // 含空格的路径必须是单个 arg（不是 3 个）
+    // a path containing spaces must be one arg (not 3)
     expect(r.args).toContain('/Users/我的文档/report 2026.pdf');
     expect(r.args.length).toBe(3); // ['read', '--file', '<path>']
   });
 
-  it('argv 模式：flag+var 的 pair 为空时跳过不传', () => {
+  it('argv mode: empty flag+var pairs are skipped entirely', () => {
     const { gw } = makeSetup() as any;
     const rt = {
       adapterId: 'argv-opt',
@@ -304,9 +304,9 @@ describe('ToolGateway', () => {
           args: [
             'draw',
             { flag: '--prompt', var: 'prompt' },
-            { flag: '--style', var: 'style' },          // 空 → 跳过
-            { flag: '--size', var: 'size', defaultValue: '1024x1024' },  // 空 → 用默认
-            { flag: '--seed', var: 'seed' },            // 空 → 跳过
+            { flag: '--style', var: 'style' },          // empty -> skipped
+            { flag: '--size', var: 'size', defaultValue: '1024x1024' },  // empty -> falls back to default
+            { flag: '--seed', var: 'seed' },            // empty -> skipped
           ],
         },
       },
@@ -319,7 +319,7 @@ describe('ToolGateway', () => {
     ]);
   });
 
-  it('argv / template 模式：含 NUL 字节或超 100k 长度变量抛错', () => {
+  it('argv / template modes: NUL bytes or vars over the 100k limit throw', () => {
     const { gw } = makeSetup() as any;
     const makeRt = (kind: any) => ({
       adapterId: 'sanitize',
@@ -331,23 +331,23 @@ describe('ToolGateway', () => {
       },
     }) as any;
 
-    // NUL 字节
+    // NUL byte
     for (const kind of ['argv', 'template'] as const) {
       expect(() => gw._renderCommand(makeRt(kind), { x: 'a\x00b' }, { workspace: '/tmp', homedir: '/tmp' }))
         .toThrow(/NUL/);
     }
-    // 超长
+    // over-long value
     const huge = 'x'.repeat(150_000);
     for (const kind of ['argv', 'template'] as const) {
       expect(() => gw._renderCommand(makeRt(kind), { x: huge }, { workspace: '/tmp', homedir: '/tmp' }))
-        .toThrow(/超过上限/);
+        .toThrow(/exceeds limit/);
     }
   });
 
-  it('cooldown：连续失败 N 次后短时间阻止调用', async () => {
+  it('cooldown: after N consecutive failures, calls are blocked for a while', async () => {
     const { gw, reg, ctx } = makeSetup() as any;
 
-    // 注册一个必然失败的假 tool（通过 ctx.subprocess.exec 抛错/返回非零）
+    // register an always-failing fake tool (ctx.subprocess.exec returns non-zero)
     ctx.subprocess.exec = async () => ({ stdout: '', stderr: 'fake failure', exitCode: 1 });
     const badAdapter = defineCliAdapter({
       id: 'bad-adapter',
@@ -361,13 +361,13 @@ describe('ToolGateway', () => {
       }] },
     });
     reg.register(badAdapter);
-    // 构造假 ScanItem 强制注册
+    // force registration via a fake ScanItem
     await gw.syncRegistrations([{
       adapterId: 'bad-adapter', executablePath: '/bin/false',
       commandName: 'nonexistent-bad', version: '1.0.0', authState: 'authenticated', scannedDepth: 'l2' as any,
     }]);
 
-    // 前 3 次应该都失败但允许调用；第 4 次进入 cooldown
+    // first 3 calls should fail but be allowed; from the 4th on we hit cooldown
     const name = 'cli-hub:bad:fail';
     let cooldownErrors = 0;
     let regularFailures = 0;
@@ -380,16 +380,16 @@ describe('ToolGateway', () => {
         else regularFailures++;
       }
     }
-    // expect: 3 次常规失败 + 2 次 cooldown
+    // expect: 3 regular failures + 2 cooldown errors
     expect(regularFailures).toBe(3);
     expect(cooldownErrors).toBe(2);
   }, 10_000);
 });
 
 // ============================================================
-// 6. defineCliAdapter 所有错误分支（覆盖 100% 分支）
+// 6. defineCliAdapter error branches (100% branch coverage)
 // ============================================================
-describe('defineCliAdapter 错误分支', () => {
+describe('defineCliAdapter error branches', () => {
   const base = {
     fingerprint: { commandNames: ['x'] },
     capabilities: { tools: [{
@@ -401,14 +401,14 @@ describe('defineCliAdapter 错误分支', () => {
     healthProbe: null,
   };
 
-  it('空 name / 空 description 抛 TypeError', () => {
+  it('empty name / empty description throw TypeError', () => {
     expect(() => defineCliAdapter({ id: 'ok-id', name: '', description: 'd', ...base } as any))
-      .toThrow(/name.*description.*必填/);
+      .toThrow(/name\/description are required/);
     expect(() => defineCliAdapter({ id: 'ok-id', name: 'N', description: '', ...base } as any))
-      .toThrow(/name.*description.*必填/);
+      .toThrow(/name\/description are required/);
   });
 
-  it('空 fingerprint.commandNames 抛 TypeError', () => {
+  it('empty fingerprint.commandNames throws TypeError', () => {
     expect(() => defineCliAdapter({
       id: 'ok-id', name: 'N', description: 'd',
       fingerprint: { commandNames: [] },
@@ -417,7 +417,7 @@ describe('defineCliAdapter 错误分支', () => {
     } as any)).toThrow(/fingerprint\.commandNames/);
   });
 
-  it('tools 和 agent 都为空时抛 TypeError（至少一个 capability）', () => {
+  it('throws TypeError when both tools and agent are empty (at least one capability required)', () => {
     expect(() => defineCliAdapter({
       id: 'nocaps', name: 'NoCaps', description: 'd',
       fingerprint: { commandNames: ['x'] },
@@ -429,16 +429,16 @@ describe('defineCliAdapter 错误分支', () => {
 });
 
 // ============================================================
-// 7. Storage 持久化 round-trip（覆盖未命中 cache → 写入 → 再读取）
+// 7. Storage persistence round-trip (cache miss -> write -> re-read)
 // ============================================================
 describe('Storage', () => {
-  it('quota cache / enabled states / usage / history 四件套 round-trip', async () => {
+  it('quota cache / enabled states / usage / history all round-trip', async () => {
     const ctx = makeFakeCtx();
     const storage = new CliHubStorage(ctx.storage.scoped);
     const empty = await storage.loadQuotaCache();
     expect(empty).toEqual({});
 
-    // 写一个 adapter quota
+    // save one adapter quota entry
     await storage.saveQuotaCacheEntry('snow-cli', {
       source: 'provider',
       currency: 'credits',
@@ -455,7 +455,7 @@ describe('Storage', () => {
     const states = await storage.loadAdapterEnabledStates();
     expect(states).toEqual({ 'snow-cli': true, 'kimi-cli': false });
 
-    // scan 历史
+    // scan history
     await storage.saveLastScan([{ adapterId: 'snow-cli', commandName: 'snow', authState: 'authenticated' }] as any);
     const last = await storage.loadLastScan();
     expect(last!.items[0].adapterId).toBe('snow-cli');
@@ -463,13 +463,13 @@ describe('Storage', () => {
 });
 
 // ============================================================
-// 8. QuotaManager 阈值告警 + 估算累计
+// 8. QuotaManager threshold warnings + usage accumulation
 // ============================================================
-describe('Quota 阈值告警 & recordUsage', () => {
-  it('command 分支：get → 写 cache → 二次命中缓存 → forceRefresh → 阈值告警 → recordUsage', async () => {
+describe('Quota threshold warning & recordUsage', () => {
+  it('command method: get -> cache write -> second get hits cache -> forceRefresh -> threshold warning -> recordUsage', async () => {
     const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-hub-quota-'));
     try {
-      // 1. 在临时 PATH 里放 quotatest-cli 脚本，输出 quota JSON
+      // 1. put a quotatest-cli script in a temp PATH dir that prints quota JSON
       const fake = path.join(tmpdir, 'quotatest-cli');
       fs.writeFileSync(fake, `#!/bin/sh
 case "$1 $2" in
@@ -481,7 +481,7 @@ esac`, { mode: 0o755 });
       process.env.PATH = tmpdir + path.delimiter + originalPath;
       try {
         const ctx = makeFakeCtx();
-        delete (ctx as any).subprocess; // 强制走 Quota 内部 child_process spawn fallback
+        delete (ctx as any).subprocess; // forces QuotaManager onto its internal child_process spawn fallback
         const reg = createDefaultRegistry(ctx, { enabledOverrides: {} });
         const storage = new CliHubStorage(ctx.storage.scoped);
         const fakeCmdQuota = defineCliAdapter({
@@ -519,7 +519,7 @@ esac`, { mode: 0o755 });
 
         const qm = new QuotaManagerServiceImpl(ctx, reg, storage, {
           cacheTtlSec: 60,
-          defaultWarningThresholdPercent: 20, // 剩 20% 告警；150/1000=15% → 应告警
+          defaultWarningThresholdPercent: 20, // warn below 20% remaining; 150/1000=15% -> should warn
         });
 
         let warningFired = false;
@@ -533,18 +533,18 @@ esac`, { mode: 0o755 });
         expect(quotaChanged).toBeGreaterThanOrEqual(1);
         expect(warningFired).toBe(true);
 
-        // 第二次 get：应命中缓存（cacheTtlSec=60 秒过期）
+        // second get: should hit the cache (cacheTtlSec=60 before expiry)
         warningFired = false;
         const q2 = await qm.get('quotatest');
         expect(q2.remaining).toBe(150);
         const snap1 = quotaChanged;
 
-        // forceRefresh：再走一次 parser
+        // forceRefresh: runs the parser again
         await qm.get('quotatest', /*forceRefresh*/ true);
-        // quotaChanged 应再 +1
+        // quotaChanged should increment again
         expect(quotaChanged).toBeGreaterThan(snap1);
 
-        // recordUsage：unknown adapter 抛错？不抛。用于 storage 累计。
+        // recordUsage: does not throw even for unknown adapters; accumulates usage into storage.
         await qm.recordUsage('quotatest', 'tool', 42);
       } finally {
         process.env.PATH = originalPath;
@@ -556,13 +556,13 @@ esac`, { mode: 0o755 });
 });
 
 // ============================================================
-// 9. Scanner L2 版本解析 + L3 authCheck 覆盖
+// 9. Scanner L2 version parsing + L3 authCheck coverage
 // ============================================================
-describe('Scanner L2/L3 分支', () => {
-  it('L2 从 --version 输出版本号；L3 authCheck 解析 authenticated', async () => {
+describe('Scanner L2/L3 branches', () => {
+  it('L2 parses version from --version output; L3 authCheck resolves authenticated', async () => {
     const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-hub-scan2-'));
     try {
-      // 假二进制
+      // fake binary
       const fake = path.join(tmpdir, 'my-fake-cli');
       fs.writeFileSync(fake, `#!/bin/sh
 case "$1" in
@@ -575,7 +575,7 @@ esac`, { mode: 0o755 });
       process.env.PATH = tmpdir + path.delimiter + originalPath;
       try {
         const ctx = makeFakeCtx();
-        delete (ctx as any).subprocess; // 强制 Scanner 走 child_process spawn 分支
+        delete (ctx as any).subprocess; // forces Scanner onto the child_process spawn branch
         const reg = createDefaultRegistry(ctx, { enabledOverrides: {} });
         const my = defineCliAdapter({
           id: 'my-fake-cli', name: 'MFC', description: 't',

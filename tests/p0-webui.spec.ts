@@ -1,11 +1,11 @@
 /**
- * p0-webui.spec — Web UI 子插件冒烟
+ * p0-webui.spec — Web UI sub-plugin smoke tests
  *
- * 覆盖：
- *   1) settings.registerSection 被正确调用 id=cli-hub；render.refresh 产出合法字段
- *   2) ui-action 事件 → dispatchUiAction 真实调用 cliHub.enable/disable/agents.stop
- *   3) settings/clientPages 都不存在，但有 ctx.http/ctx.router → GET adapters 返回 JSON
- *   4) 三条路径都没有时，cliHub.ui 内存 API 仍可用（getDashboard/dispatch）
+ * Coverage:
+ *   1) settings.registerSection is called with id=cli-hub; render.refresh produces valid fields
+ *   2) ui-action event -> dispatchUiAction really calls cliHub.enable/disable/agents.stop
+ *   3) settings/clientPages absent but ctx.http/ctx.router present -> GET adapters returns JSON
+ *   4) when none of the three paths exist, the cliHub.ui in-memory API still works (getDashboard/dispatch)
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import path from 'node:path';
@@ -27,7 +27,7 @@ function makeAdapter(id: string, overrides: Partial<AdapterDef> = {}): AdapterDe
 }
 
 async function applyPluginChain(context: AnyCtx, config: any = {}) {
-  // 按 src/index.ts 的顺序造 cliHub（轻量版，不跑真实 scanner fork）
+  // build cliHub in the same order as src/index.ts (lightweight; no real scanner fork)
   const { createDefaultRegistry } = await import('../src/core/registry');
   const { loadBuiltinAdapters } = await import('../src/adapters/builtin');
 
@@ -67,7 +67,7 @@ async function applyPluginChain(context: AnyCtx, config: any = {}) {
     },
     enable: vi.fn((id) => registry.setEnabled(id, true)),
     disable: vi.fn((id) => registry.setEnabled(id, false)),
-    // ui: 占位，web.apply 会真实覆盖它（先给个空壳让类型不报错）
+    // ui: placeholder; web.apply overwrites it for real (empty shell keeps types happy)
     ui: null as any,
   };
   (context as any).set = vi.fn((_k: string, v: any) => v);
@@ -93,7 +93,7 @@ describe('Web UI (web plugin)', () => {
     };
   });
 
-  it('1) settings.registerSection 被调用(id=cli-hub)；refresh 字段没有 undefined 非法引用（installPath/displayName/agents.list 等）', async () => {
+  it('1) settings.registerSection is called (id=cli-hub); refresh fields contain no undefined/illegal references (installPath/displayName/agents.list etc.)', async () => {
     let captured: any = null;
     ctx.settings = {
       registerSection: vi.fn((s: any) => { captured = s; }),
@@ -104,7 +104,7 @@ describe('Web UI (web plugin)', () => {
     expect(captured?.id).toBe('cli-hub');
     expect(typeof captured.render).toBe('function');
 
-    // 加一条假 ScanItem，验证 projection 生成没有 undefined 崩溃
+    // add a fake ScanItem and verify projection generation does not crash on undefined
     const fakeItem: any = {
       adapterId: 'claude-code',
       executablePath: '/opt/bin/claude',
@@ -115,39 +115,39 @@ describe('Web UI (web plugin)', () => {
     };
     scanItemsStub.push(fakeItem);
     registry.register(makeAdapter('extra', { id: 'extra', fingerprint: { commandNames: ['extra-cli'] } }));
-    // claude-code 是 builtin，确保它 registry 存在且 isEnabled=true（defaultEnabled）
+    // claude-code is builtin; ensure it exists in the registry and isEnabled=true (defaultEnabled)
     expect(registry.get('claude-code')).toBeTruthy();
     registrySetEnabledCompat(registry, 'claude-code', true);
 
     const out = captured.render();
-    // 2 sections 存在（4 个）；refresh 执行时不 throw
+    // sections exist (6 total); refresh must not throw
     const { sections } = out;
     expect(sections.length >= 3).toBe(true);
-    const scannerSection = sections.find((s: any) => s.title && s.title.includes('已发现'));
+    const scannerSection = sections.find((s: any) => s.title && s.title.includes('Discovered AI CLIs'));
     const rows = await scannerSection.refresh({ depth: 'l3' });
     expect(Array.isArray(rows)).toBe(true);
-    // 行字段校验（不存在 undefined installPath/displayName）
+    // row field validation (no undefined installPath/displayName)
     const r = rows.find((x: any) => x.id === 'claude-code') || rows[0];
     expect(r).toBeTruthy();
     expect(typeof r.displayName).toBe('string');
     expect(r.displayName.length > 0).toBe(true);
-    expect(r.executablePath).toBe(fakeItem.executablePath); // 注意：之前占位写的是 installPath，现在应修正为 executablePath
+    expect(r.executablePath).toBe(fakeItem.executablePath); // note: an earlier placeholder used installPath; must be executablePath now
     expect(['success', 'warning', 'danger', 'muted']).toContain(r.authBadge?.color);
     expect(typeof r.enabled).toBe('boolean');
     expect(Array.isArray(r.capabilities)).toBe(true);
     expect(Array.isArray(r.actions)).toBe(true);
-    // 不允许引用到 cliHub.agents.list（必须是 listSessions）
+    // must not reference cliHub.agents.list (must be listSessions)
     const txt = JSON.stringify(r);
     expect(txt).not.toContain('undefined');
-    // Agent section refresh 不 crash
+    // Agent section refresh does not crash
     const agentSection = sections.find((s: any) => s.title && s.title.includes('Agent'));
     const agentRows = await agentSection.refresh();
     expect(Array.isArray(agentRows)).toBe(true);
-    // 证明 agent.listSessions 真的被调用（说明已修掉之前占位 bug 的 agents.list()）
+    // proves agent.listSessions is really called (the earlier agents.list() placeholder bug is fixed)
     expect(cliHub.agents.listSessions).toHaveBeenCalled();
   });
 
-  it('2) 通过 cli-hub/ui-action 事件派发 toggle-adapter/agent-stop → 真实调用 cliHub.enable/disable/agents.stop', async () => {
+  it('2) dispatching toggle-adapter/agent-stop via the cli-hub/ui-action event -> really calls cliHub.enable/disable/agents.stop', async () => {
     const listeners: Record<string, Function[]> = {};
     ctx.on = vi.fn((evt: string, cb: Function) => { (listeners[evt] = listeners[evt] ?? []).push(cb); });
     ctx.settings = { registerSection: vi.fn() };
@@ -157,7 +157,7 @@ describe('Web UI (web plugin)', () => {
     const uiAction = ({ id, payload }: any) => {
       for (const cb of listeners['cli-hub/ui-action'] ?? []) cb({ id, payload });
     };
-    // wait microtask（订阅是同步，但我们在 apply 时注册，直接能拿到）
+    // wait a microtask (subscription is sync, registered during apply, so it is available already)
     await 0;
 
     uiAction({ id: 'toggle-adapter', payload: { adapterId: 'foo', enabled: false } });
@@ -173,7 +173,7 @@ describe('Web UI (web plugin)', () => {
     expect(cliHub.agents.stop).toHaveBeenCalledWith('foo');
   });
 
-  it('3) settings/clientPages 缺，但 ctx.http 存在 → 注册了 /plugins/cli-hub/api/adapters 等路由并能返回 JSON', async () => {
+  it('3) settings/clientPages missing but ctx.http present -> /plugins/cli-hub/api/adapters routes registered and return JSON', async () => {
     const routes: Array<{ method: string; route: string; handler: Function }> = [];
     ctx.http = {
       get: vi.fn((route: string, handler: Function) => { routes.push({ method: 'get', route, handler }); }),
@@ -182,10 +182,10 @@ describe('Web UI (web plugin)', () => {
     const { cliHub, registry } = await applyPluginChain(ctx);
     registry.register(makeAdapter('bar', { id: 'bar', defaultEnabled: true }));
     expect(ctx.http.get).toHaveBeenCalled();
-    // 找 dashboard / adapters 两个接口
+    // find the dashboard / adapters endpoints
     const adaptersRoute = routes.find((r) => r.route === '/plugins/cli-hub/api/adapters');
     expect(adaptersRoute).toBeTruthy();
-    // 模拟调用：{ status().json() } 响应
+    // simulate the call: { status().json() } response shape
     const res = { status: vi.fn(() => res), json: vi.fn((x: any) => x) };
     await adaptersRoute!.handler({}, res);
     expect(res.status).toHaveBeenCalledWith(200);
@@ -196,30 +196,30 @@ describe('Web UI (web plugin)', () => {
     expect(ids.has('claude-code')).toBe(true); // builtin
   });
 
-  it('4) 三条路径都缺 → 仍然挂出 cliHub.ui 内存 API（getDashboard/dispatch），作为兜底入口', async () => {
-    // ctx 没有 settings/clientPages/http/router
+  it('4) all three paths missing -> the cliHub.ui in-memory API (getDashboard/dispatch) is still mounted as the fallback entry', async () => {
+    // ctx has no settings/clientPages/http/router
     const { cliHub } = await applyPluginChain(ctx);
     expect(cliHub.ui).toBeTruthy();
     expect(typeof cliHub.ui.getDashboard).toBe('function');
     expect(typeof cliHub.ui.getAdapterRows).toBe('function');
     expect(typeof cliHub.ui.dispatch).toBe('function');
 
-    // dispatch 走 toggle-adapter
+    // dispatch via toggle-adapter
     registrySetEnabledCompat(cliHub.registry, 'claude-code', true);
     const result = await cliHub.ui.dispatch('toggle-adapter', { adapterId: 'claude-code', enabled: false });
     expect(result?.ok).toBe(true);
     expect(cliHub.disable).toHaveBeenCalledWith('claude-code');
 
-    // dashboard 基本结构
+    // basic dashboard shape
     const d = await cliHub.ui.getDashboard();
     expect(typeof d.adaptersTotal).toBe('number');
     expect(d.adaptersTotal).toBeGreaterThan(0);
     expect(typeof d.summary.total).toBe('number');
   });
 
-  it('5) 投影纯函数：projectScannerRows / projectAdapterRows 边界 case（无 adapterId、auth=unauthenticated 追加 installHint action）', async () => {
+  it('5) projection pure functions: projectScannerRows / projectAdapterRows edge cases (no adapterId; auth=unauthenticated appends the installHint action)', async () => {
     const { projectScannerRows, projectAdapterRows } = await import('../src/web/index');
-    // 无 adapterId 的 scanner item（"looksLikeAiCli unmatched" 分支）
+    // scanner item without adapterId (unmatched "looksLikeAiCli" branch)
     const raw: any[] = [
       { adapterId: null, executablePath: '/usr/bin/gpt-cli', commandName: 'gpt-cli', version: '1.0', authState: 'unknown', scannedDepth: 'l1' },
       { adapterId: 'snow-cli', executablePath: '/usr/bin/snow', commandName: 'snow', version: '0.3', authState: 'unauthenticated', authHint: 'please snow login', scannedDepth: 'l3' },
@@ -232,10 +232,10 @@ describe('Web UI (web plugin)', () => {
     expect(rows[0].displayName).toBe('gpt-cli');
     expect(rows[1].id).toBe('snow-cli');
     expect(rows[1].installHint).toBeTruthy();
-    // 未登录 + 有 installHint → show-install-hint action
+    // unauthenticated + has installHint -> show-install-hint action
     expect(rows[1].actions.some((a: any) => a.id === 'show-install-hint')).toBe(true);
 
-    // projectAdapterRows: scanItems 长度不同不会污染默认值（discovered = false 正确）
+    // projectAdapterRows: differing scanItems lengths do not pollute defaults (discovered=false is correct)
     const defs = [
       { id: 'x', name: 'X', description: 'd', capabilities: { tools: [] }, fingerprint: { commandNames: ['x'] }, defaultEnabled: true },
       { id: 'y', name: 'Y', description: 'd', capabilities: { agent: { protocol: 'line-based', spawn: { command: 'y', argsTemplate: [] } } }, fingerprint: { commandNames: ['y'] }, installHint: 'install y' },
@@ -243,11 +243,11 @@ describe('Web UI (web plugin)', () => {
     const adapterRows = projectAdapterRows(defs as any, { registryEnabled: () => true, scanItems: [{ adapterId: 'x', executablePath: '', commandName: 'x', version: '1', authState: 'authenticated', scannedDepth: 'l3' } as any] });
     expect(adapterRows.find((r: any) => r.id === 'x')?.discovered).toBe(true);
     expect(adapterRows.find((r: any) => r.id === 'y')?.discovered).toBe(false);
-    expect(adapterRows.find((r: any) => r.id === 'y')?.actions.some((a: any) => a.id === 'show-install-hint')).toBe(true); // y 未安装+有 hint
+    expect(adapterRows.find((r: any) => r.id === 'y')?.actions.some((a: any) => a.id === 'show-install-hint')).toBe(true); // y not installed + has hint
   });
 });
 
-// helper: 兼容 registry.setEnabled 签名
+// helper: tolerant of registry.setEnabled signature variants
 function registrySetEnabledCompat(registry: any, id: string, enabled: boolean) {
   if (registry && typeof registry.setEnabled === 'function') registry.setEnabled(id, enabled);
 }

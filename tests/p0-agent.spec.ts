@@ -1,9 +1,9 @@
 /**
- * AgentGateway P0 单测
+ * AgentGateway P0 unit tests
  *
- * 真实策略：把 mock agent 脚本写到临时 .js 文件，再用 `node /tmp/xxx.js` 启动。
- * 不依赖外部环境（不需要真实 claude-code/snow-cli）。用磁盘文件绕开
- * `node -e <src>` 的双重 \n 转义 hell（单引号字符串内部跨行会 SyntaxError）。
+ * Strategy: write the mock agent scripts to temp .js files, then launch them with `node /tmp/xxx.js`.
+ * No external environment required (no real claude-code/snow-cli). Real files on disk sidestep
+ * the double-\n escaping hell of `node -e <src>` (multiline single-quoted strings throw SyntaxError).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -21,10 +21,10 @@ function writeAgentScript(filename: string, src: string): string {
   return full;
 }
 
-// ---- Mock agent 脚本（String.raw = 字面量 \n 不被模板展开，写进磁盘就是真实\n ----
+// ---- Mock agent scripts (String.raw keeps literal \n unexpanded by the template; what lands on disk is a real \n escape) ----
 const JSONRPC_AGENT_JS = writeAgentScript('jsonrpc-agent.js', String.raw`
 'use strict';
-// ready 行：确保包含 "jsonrpc" + "method"
+// ready line: must contain "jsonrpc" + "method"
 process.stdout._handle?.setBlocking?.(true);
 process.stdout.write('HELLO {"jsonrpc":"2.0","method":"initialize"}\n');
 let buf = '';
@@ -68,7 +68,7 @@ function makeFakeCtx(): any {
   return {
     baseDir: '/tmp/dsh-p0-agent',
     logger: { info: () => {}, warn: console.warn, debug: () => {}, error: console.error },
-    // 不提供 ctx.subprocess.spawn → AgentGateway 自动 fallback 到 node child_process
+    // no ctx.subprocess.spawn provided -> AgentGateway automatically falls back to node child_process
   };
 }
 
@@ -144,21 +144,22 @@ describe('AgentGateway', () => {
     }
   });
 
-  // ---------- 基础错误 ----------
-  it('无此 adapter 时 spawn 抛错', async () => {
+  // ---------- basic errors ----------
+  it('spawn throws when the adapter does not exist', async () => {
     await expect(gw.spawn('does-not-exist')).rejects.toThrow(/not found/);
   });
 
-  it('adapter 禁用时 spawn 抛错', async () => {
+  it('spawn throws when the adapter is disabled', async () => {
     const ad = makeJsonrpcAdapter();
     reg.register(ad);
     reg.setEnabled(ad.id, false);
     await expect(gw.spawn(ad.id)).rejects.toThrow(/not enabled/);
   });
 
-  it('adapter 没 agent 能力时抛错', async () => {
-    // 注意：defineCliAdapter 要求至少一个 capability（tools 或 agent）。
-    // 给一个假 tools 过 define，测试的是 spawn 时因为没有 agent 字段而被拒绝。
+  it('spawn throws when the adapter has no agent capability', async () => {
+    // Note: defineCliAdapter requires at least one capability (tools or agent).
+    // Give it a dummy tools capability to pass define; what we test is that spawn rejects
+    // because there is no agent field.
     const noAgent = defineCliAdapter({
       id: 'no-agent', name: 'x', description: 'x',
       fingerprint: { commandNames: ['ls'] },
@@ -179,8 +180,8 @@ describe('AgentGateway', () => {
     await expect(gw.spawn(noAgent.id)).rejects.toThrow(/no agent capability/);
   });
 
-  // ---------- jsonrpc 协议（claude-code 风格）----------
-  it('jsonrpc: spawn → waitReady → request 按 id 路由回来', async () => {
+  // ---------- jsonrpc protocol (claude-code style) ----------
+  it('jsonrpc: spawn -> waitReady -> request is routed back by id', async () => {
     const ad = makeJsonrpcAdapter();
     reg.register(ad);
     const ses = await gw.spawn(ad.id);
@@ -197,7 +198,7 @@ describe('AgentGateway', () => {
     expect(list.find(s => s.adapterId === ad.id)).toBeTruthy();
   }, 15_000);
 
-  it('jsonrpc: singleton 复用同一个 session（默认不允许并行启动两个）', async () => {
+  it('jsonrpc: singleton reuses the same session (no two parallel instances by default)', async () => {
     const ad = makeJsonrpcAdapter();
     reg.register(ad);
     const s1 = await gw.spawn(ad.id);
@@ -207,8 +208,8 @@ describe('AgentGateway', () => {
     await expect(gw.spawn(ad.id, { reuse: false })).rejects.toThrow(/already running/);
   }, 15_000);
 
-  // ---------- line-based 协议（snow-cli repl 风格）----------
-  it('line-based: readyPattern 匹配 banner 最后一行，send 行 → recv ECHO 回来', async () => {
+  // ---------- line-based protocol (snow-cli REPL style) ----------
+  it('line-based: readyPattern matches the last banner line; send a line -> recv ECHO back', async () => {
     const ad = makeLineAdapter();
     reg.register(ad);
     const ses = await gw.spawn(ad.id);
@@ -221,7 +222,7 @@ describe('AgentGateway', () => {
   }, 15_000);
 
   // ---------- shutdown ----------
-  it('shutdown：调用后进程退出，session 从 list 消失', async () => {
+  it('shutdown: after the call the process exits and the session disappears from the list', async () => {
     const ad = makeJsonrpcAdapter();
     reg.register(ad);
     const ses: any = await gw.spawn(ad.id);
@@ -235,7 +236,7 @@ describe('AgentGateway', () => {
     expect(alive).toBe(false);
   }, 12_000);
 
-  it('stopAll 同时关闭多个不同协议的 session', async () => {
+  it('stopAll closes multiple sessions on different protocols at once', async () => {
     const a = makeJsonrpcAdapter();
     const b = makeLineAdapter();
     reg.register(a); reg.register(b);
@@ -248,7 +249,7 @@ describe('AgentGateway', () => {
     expect(gw.listSessions().length).toBe(0);
   }, 15_000);
 
-  it('agent stop 方法返回 true/false', async () => {
+  it('agent stop returns true/false', async () => {
     expect(await gw.stop('no-such-adapter')).toBe(false);
 
     const ad = makeJsonrpcAdapter();
