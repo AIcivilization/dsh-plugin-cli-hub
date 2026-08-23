@@ -2,17 +2,17 @@
 /**
  * smoke-10-adapters-fingerprint.mjs
  *
- * 不依赖登录态、不真发起付费调用：
- *   · 构造默认 Registry，加载 33 个 BUILTIN_ADAPTERS
- *   · 对 10 个主流 adapter（id 硬编码在下面）做 Scanner L1/L2 探测
- *   · L1 通过：系统里能找到至少一个 commandNames 可执行文件
- *   · L2 通过：`--version` 能输出版本字符串并匹配 fingerprint.versionPattern
- *   · L3 authCheck：只跑命令，不根据通过/失败计数（要登录）。
+ * Requires no login state and makes no real paid calls:
+ *   · Build the default Registry, load 33 BUILTIN_ADAPTERS
+ *   · Run Scanner L1/L2 probes on 10 mainstream adapters (ids hardcoded below)
+ *   · L1 pass: at least one commandNames executable is found on the system
+ *   · L2 pass: `--version` outputs a version string matching fingerprint.versionPattern
+ *   · L3 authCheck: only runs the command, no pass/fail counting (needs login).
  *
- * 单台 Mac 通常能命中 7~20 个，这个脚本只关心 L1/L2 的 fingerprint 写得对不对。
+ * A single Mac typically hits 7~20 adapters; this script only checks whether the L1/L2 fingerprints are written correctly.
  *
- * 用法：node scripts/smoke-10-adapters-fingerprint.mjs [--all]
- *       --all：检测全部 33 个 adapter，而不是只测 10 个主流的
+ * Usage: node scripts/smoke-10-adapters-fingerprint.mjs [--all]
+ *        --all: detect all 33 adapters instead of only the 10 mainstream ones
  */
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';

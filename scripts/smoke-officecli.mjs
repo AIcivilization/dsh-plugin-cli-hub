@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * smoke-officecli.mjs — OfficeCLI Tool 模式冒烟测试。
+ * smoke-officecli.mjs — OfficeCLI Tool-mode smoke test.
  *
- * 只跑 gen-ppt / gen-word / gen-excel 三个 tool 的**命令行启动**（依赖最小输入），
- * 不验证输出内容正确性；只要 exit 0 且产物文件 < 100% 空就 PASS。
+ * Only exercises **command-line startup** of the gen-ppt / gen-word / gen-excel tools (minimal input);
+ * does not verify output content correctness — PASS as long as exit 0 and the artifact file is not empty.
  *
- * 未装 officecli / 未登录 → 整体 SKIP。
+ * officecli not installed / not logged in → overall SKIP.
  *
- * 用法：node scripts/smoke-officecli.mjs
+ * Usage: node scripts/smoke-officecli.mjs
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, statSync, rmSync, existsSync } from 'node:fs';

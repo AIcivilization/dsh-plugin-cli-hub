@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /* =========================================================================
- * scripts/show-quota.mjs —— 扫描本机所有 AI CLI 并显示额度状态
+ * scripts/show-quota.mjs — Scan all AI CLIs on this machine and display quota status
  *
- * 用法:  node scripts/show-quota.mjs
+ * Usage:  node scripts/show-quota.mjs
  *
- * 输出：
- *   1. 扫描发现的 CLI（包含路径/版本/认证状态）
- *   2. 每个 CLI 的额度（currency / used / total / 来源）
+ * Output:
+ *   1. CLIs discovered by the scan (including path/version/auth status)
+ *   2. Each CLI's quota (currency / used / total / source)
  * =======================================================================*/
 import path from 'node:path';
 import process from 'node:process';
 import fs from 'node:fs';
 import { spawn as cp_spawn } from 'node:child_process';
 
-// 确保 ~/.local/bin / /usr/local/bin / /opt/homebrew/bin 在 PATH 上
+// Ensure ~/.local/bin / /usr/local/bin / /opt/homebrew/bin are on PATH
 const extraDirs = [
   `${process.env.HOME}/.local/bin`,
   '/usr/local/bin',
@@ -26,14 +26,14 @@ if (missing.length > 0) process.env.PATH = [...missing, PATH].join(':');
 
 const DIST = path.resolve(process.cwd(), 'dist/index.js');
 if (!fs.existsSync(DIST)) {
-  console.error('\x1b[31m[err] dist/index.js 不存在，请先运行 pnpm build\x1b[0m');
+  console.error('\x1b[31m[err] dist/index.js does not exist; run pnpm build first\x1b[0m');
   process.exit(1);
 }
 
 const PKG = await import(DIST);
 const { apply, name } = PKG;
 
-// ============== 构造最小 Cordis Context ==============
+// ============== Build a minimal Cordis Context ==============
 const mem = {};
 const ctx = {
   scope: 'show-quota',
@@ -85,33 +85,33 @@ const ctx = {
   plugin: () => {},
 };
 
-// ============== 1. 装配插件 ==============
-console.log(`\n\x1b[1m[1/3] 装配插件: ${name}\x1b[0m`);
-try { await apply(ctx); } catch (e) { console.error('apply 失败:', e); process.exit(1); }
+// ============== 1. Load the plugin ==============
+console.log(`\n\x1b[1m[1/3] Loading plugin: ${name}\x1b[0m`);
+try { await apply(ctx); } catch (e) { console.error('apply failed:', e); process.exit(1); }
 const cliHub = ctx.cliHub ?? ctx.get?.('cliHub');
-if (!cliHub) { console.error('cliHub 未挂载'); process.exit(1); }
-console.log('   ✓ 插件装配完成');
+if (!cliHub) { console.error('cliHub not mounted'); process.exit(1); }
+console.log('   ✓ plugin loaded');
 
-// ============== 2. 扫描本机 AI CLI ==============
-console.log(`\n\x1b[1m[2/3] 扫描本机 AI CLI（L3 深度）\x1b[0m`);
+// ============== 2. Scan local AI CLIs ==============
+console.log(`\n\x1b[1m[2/3] Scanning local AI CLIs (L3 deep)\x1b[0m`);
 const scanResult = await cliHub.scan({ depth: 'l3', timeoutPerCmd: 8000 });
 const items = Array.isArray(scanResult) ? scanResult : (scanResult?.items ?? []);
 const discovered = items.filter(i => i.adapterId);
-console.log(`   扫描完成：共发现 \x1b[36m${discovered.length}\x1b[0m 个 AI CLI`);
+console.log(`   Scan complete: found \x1b[36m${discovered.length}\x1b[0m AI CLIs`);
 if (discovered.length === 0) {
-  console.log('\n   \x1b[33m未发现任何已注册的 AI CLI。检查 PATH：\x1b[0m');
+  console.log('\n   \x1b[33mNo registered AI CLIs found. Check PATH:\x1b[0m');
   console.log('   ' + process.env.PATH.split(':').slice(0, 6).join(':') + '...');
   process.exit(0);
 }
 
-// ============== 3. 查询每个 CLI 的额度 ==============
-console.log(`\n\x1b[1m[3/3] 查询额度状态\x1b[0m\n`);
+// ============== 3. Query each CLI's quota ==============
+console.log(`\n\x1b[1m[3/3] Querying quota status\x1b[0m\n`);
 
 const allAdapters = cliHub.registry.listAdapters();
 const enabledIds = new Set(discovered.map(i => i.adapterId));
 const targetIds = Array.from(enabledIds);
 
-// 表格渲染
+// Table rendering
 const COLS = [
   { key: 'adapterId', w: 16, label: 'Adapter' },
   { key: 'version',   w: 14, label: 'Version' },
@@ -145,7 +145,7 @@ for (const id of targetIds) {
   });
 }
 
-// 输出表格
+// Print the table
 const pad = (s, w) => String(s ?? '').padEnd(w, ' ').slice(0, w);
 const header = COLS.map(c => pad(c.label, c.w)).join('  ');
 const sep = COLS.map(c => '─'.repeat(c.w)).join('──');
@@ -153,29 +153,29 @@ console.log(`  ${header}`);
 console.log(`  ${sep}`);
 for (const r of rows) {
   const cells = COLS.map(c => pad(r[c.key] ?? '-', c.w)).join('  ');
-  // 颜色：根据 source 区分
+  // Color: differentiate by source
   const source = r.source;
   let prefix = '  ';
-  if (source === 'provider') prefix = '\x1b[32m  '; // 绿
-  else if (source === 'estimate') prefix = '\x1b[33m  '; // 黄
-  else if (source === 'error') prefix = '\x1b[31m  '; // 红
+  if (source === 'provider') prefix = '\x1b[32m  '; // green
+  else if (source === 'estimate') prefix = '\x1b[33m  '; // yellow
+  else if (source === 'error') prefix = '\x1b[31m  '; // red
   console.log(`${prefix}${cells}\x1b[0m`);
 }
 
-// 详情
-console.log(`\n\x1b[1m详情：\x1b[0m\n`);
+// Details
+console.log(`\n\x1b[1mDetails:\x1b[0m\n`);
 for (const r of rows) {
   const item = discovered.find(i => i.adapterId === r.adapterId);
   const adapterDef = allAdapters.find(a => a.id === r.adapterId);
   console.log(`\x1b[36m■ ${r.adapterId}\x1b[0m  ${adapterDef?.name ?? ''} (${adapterDef?.vendor ?? '?'})`);
-  console.log(`   路径:    ${item?.executablePath ?? '-'}`);
-  console.log(`   版本:    ${r.version}`);
-  console.log(`   认证:    ${r.auth}`);
-  console.log(`   额度来源: ${r.source}${r.source === 'estimate' ? '（provider 不支持查询，使用本地估算累计）' : ''}`);
-  console.log(`   货币类型: ${r.currency}`);
-  console.log(`   已使用:  ${r.used}${r.period !== '-' ? ` / 周期: ${r.period}` : ''}`);
-  console.log(`   总额度:  ${r.total}`);
-  console.log(`   剩余:    ${r.remaining}`);
-  if (item?.authHint) console.log(`   提示:    ${item.authHint}`);
+  console.log(`   Path:         ${item?.executablePath ?? '-'}`);
+  console.log(`   Version:      ${r.version}`);
+  console.log(`   Auth:         ${r.auth}`);
+  console.log(`   Quota source: ${r.source}${r.source === 'estimate' ? ' (provider does not support queries; using local estimated totals)' : ''}`);
+  console.log(`   Currency:     ${r.currency}`);
+  console.log(`   Used:         ${r.used}${r.period !== '-' ? ` / period: ${r.period}` : ''}`);
+  console.log(`   Total:        ${r.total}`);
+  console.log(`   Remaining:    ${r.remaining}`);
+  if (item?.authHint) console.log(`   Hint:         ${item.authHint}`);
   console.log();
 }

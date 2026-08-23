@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * smoke-copilot.mjs — Copilot CLI Tool 模式冒烟测试。
+ * smoke-copilot.mjs — Copilot CLI Tool-mode smoke test.
  *
- * 2 个 tool：suggest（返回 schema 或自然语言建议）、explain（解释一段命令）。
- * 需要本机装了 `copilot` 并且已登录（`copilot auth` / GitHub Copilot subscription）。
+ * 2 tools: suggest (returns a schema or natural-language suggestion) and explain (explains a command).
+ * Requires `copilot` installed locally and logged in (`copilot auth` / GitHub Copilot subscription).
  *
- * 用法：node scripts/smoke-copilot.mjs
+ * Usage: node scripts/smoke-copilot.mjs
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 

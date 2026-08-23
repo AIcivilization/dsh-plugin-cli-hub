@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
  * Real-environment smoke test for Claude Code Agent mode.
- * 直接通过 AgentGateway 启动真实 claude 进程，验证：
- *   1) spawn 成功（subprocess 起来）
- *   2) ready 检测命中（subtype=init 事件）
- *   3) send 一条 user 消息
- *   4) recv 拿到 assistant 消息（带 text）
- *   5) shutdown 三阶段优雅关闭
+ * Launches a real claude process directly via AgentGateway to verify:
+ *   1) spawn succeeds (subprocess comes up)
+ *   2) ready detection hits (subtype=init event)
+ *   3) send a user message
+ *   4) recv gets an assistant message (with text)
+ *   5) shutdown gracefully closes in three phases
  *
- * 调用：node scripts/smoke-claude-agent.mjs
- * 退出码：0 全通过；非 0 = 失败步骤
+ * Usage: node scripts/smoke-claude-agent.mjs
+ * Exit code: 0 = all passed; non-zero = failed step
  */
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -18,11 +18,11 @@ import * as path from 'node:path';
 const require = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// 加载 bundle 产物（CJS）—— 真实复现 DSH 运行时
+// Load the bundle artifact (CJS) — faithfully reproduces the DSH runtime
 const distCjs = path.join(__dirname, '..', 'dist', 'index.cjs');
 const mod = require(distCjs);
 
-// 加载内置 adapter（bundle 后通过 mod.BUILTIN_ADAPTERS 暴露）
+// Load built-in adapters (exposed via mod.BUILTIN_ADAPTERS after bundling)
 const adapters = mod.BUILTIN_ADAPTERS || [];
 const claudeAdapter = adapters.find(a => a.id === 'claude-code');
 if (!claudeAdapter) {
@@ -37,16 +37,16 @@ console.log('  spawn cmd   =', claudeAdapter.capabilities.agent.spawn.command);
 console.log('  spawn args  =', JSON.stringify(claudeAdapter.capabilities.agent.spawn.argsTemplate));
 console.log('  readyPat    =', claudeAdapter.capabilities.agent.spawn.readyPattern);
 
-// 构造一个最小 registry
+// Build a minimal registry
 const registry = {
   get: (id) => id === 'claude-code' ? claudeAdapter : undefined,
   isEnabled: (id) => id === 'claude-code',
 };
 
-// 构造最小 ctx：只提供 baseDir，subprocess 缺失以走 node child_process fallback
+// Build a minimal ctx: only provide baseDir; omit subprocess so the node child_process fallback is used
 const ctx = {
   baseDir: process.cwd(),
-  // 故意不提供 ctx.subprocess，强制走 fallback，确保单测外也能跑
+  // Deliberately omit ctx.subprocess to force the fallback, ensuring it also runs outside unit tests
 };
 
 const agentGateway = mod.createAgentGateway(ctx, registry, {
@@ -74,7 +74,7 @@ async function main() {
   }
 
   // ===== Step 2: send a user message =====
-  // stream-json 输入：{"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}
+  // stream-json input: {"type":"user","message":{"role":"user","content":[{"type":"text","text":"..."}]}}
   log('Step 2: sending user message "say: pong (only the word)"...');
   const userMsg = {
     type: 'user',
@@ -85,7 +85,7 @@ async function main() {
   };
   await session.send(userMsg);
 
-  // ===== Step 3: recv loop —— 收集 assistant 事件，最长等 60s =====
+  // ===== Step 3: recv loop — collect assistant events, wait up to 60s =====
   log('Step 3: receiving stream-json events (timeout 60s)...');
   const startTime = Date.now();
   const events = [];

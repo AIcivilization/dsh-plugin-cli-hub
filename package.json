@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-cli-hub",
   "version": "0.1.0",
-  "description": "DeepSeek Harness plugin: auto-scans 33+ local AI CLIs and reuses their subscribed quotas as Tool & Agent providers. | 自动扫描本机 33+ AI CLI，复用已订阅额度作为 DSH Tool & Agent。",
+  "description": "DeepSeek Harness plugin: auto-scans 33+ local AI CLIs and reuses their subscribed quotas as Tool & Agent providers.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",

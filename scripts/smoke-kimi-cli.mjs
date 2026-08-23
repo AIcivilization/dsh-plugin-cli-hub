@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * smoke-kimi-cli.mjs — Kimi CLI Tool 模式冒烟测试。
+ * smoke-kimi-cli.mjs — Kimi CLI Tool-mode smoke test.
  *
- * 验证 2 个 Tool：search（联网）和 read-long（读本地小文件）。
- * 未登录/未装 kimi → 整体 SKIP。网络失败/单次超时时 → 单个 SKIP。
+ * Verifies 2 Tools: search (network) and read-long (reads a small local file).
+ * Not logged in / kimi not installed → overall SKIP. Network failure / single timeout → single SKIP.
  *
- * 用法：node scripts/smoke-kimi-cli.mjs
+ * Usage: node scripts/smoke-kimi-cli.mjs
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';

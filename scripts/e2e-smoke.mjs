@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /* =========================================================================
- * scripts/e2e-smoke.mjs —— 不需要写入 ~/.dsh 的最小端到端冒烟测试
+ * scripts/e2e-smoke.mjs — minimal end-to-end smoke test that never writes to ~/.dsh
  *
- * 覆盖目标：
- *   [ ] P1-8 验证: apply() 成功后 ctx.cliHub 挂载 + ToolGateway.syncRegistrations 真正调用 ctx.tools.define
- *   [ ] Scanner 真 L3 扫描: 实际扫本机 PATH 并命中 ~/.local/bin/claude (Claude Code 2.1.235 / pro)
- *   [ ] AgentGateway 端到端: 用 /tmp 下的假脚本模拟 jsonrpc + line-based，验证 spawn/ready/send/recv/shutdown
+ * Coverage:
+ *   [ ] P1-8 check: after apply() succeeds, ctx.cliHub is mounted + ToolGateway.syncRegistrations really calls ctx.tools.define
+ *   [ ] Real Scanner L3 scan: actually scans the local PATH and hits ~/.local/bin/claude (Claude Code 2.1.235 / pro)
+ *   [ ] AgentGateway end-to-end: fake scripts under /tmp simulate jsonrpc + line-based, verifying spawn/ready/send/recv/shutdown
  *
- * 运行:  node scripts/e2e-smoke.mjs
+ * Run:  node scripts/e2e-smoke.mjs
  * =======================================================================*/
 import os from 'node:os';
 import fs from 'node:fs';
@@ -18,15 +18,15 @@ import { spawn as cp_spawn } from 'node:child_process';
 const ok = (k, s) => console.log(`\x1b[32m ✓ PASS\x1b[0m  ${k}${s ? ' — ' + s : ''}`);
 const fail = (k, e) => { console.error(`\x1b[31m ✗ FAIL\x1b[0m  ${k}\n   ${String(e?.stack || e).split('\n').slice(0,4).join('\n   ')}`); process.exitCode = 1; };
 
-// =============== 1. 加载插件 ===============
+// =============== 1. Load the plugin ===============
 const DIST = path.resolve(process.cwd(), 'dist/index.js');
 const PKG = await import(DIST);
 const { apply, name, defineCliAdapter, webSubPlugin } = PKG;
-console.log(`\n\x1b[1m[e2e] 加载插件: ${name} from ${DIST}\x1b[0m`);
+console.log(`\n\x1b[1m[e2e] Loading plugin: ${name} from ${DIST}\x1b[0m`);
 
-// =============== 2. 构造最小 Cordis Context ===============
+// =============== 2. Build a minimal Cordis context ===============
 const mem = {};
-const toolsCalls = [];   // 记录 ctx.tools.define / defineTool / dispose 调用
+const toolsCalls = [];   // records ctx.tools.define / defineTool / dispose calls
 const ctx = {
   scope: 'e2e-smoke',
   // ---- storage.scoped ----
@@ -43,7 +43,7 @@ const ctx = {
     warn:  (...a) => console.warn(`\x1b[33m[WARN ${scope}]\x1b[0m`, ...a),
     error: (...a) => console.error(`\x1b[31m[ERR ${scope}]\x1b[0m`, ...a),
   }),
-  // ---- 真实子进程执行（GatewayTool 必须用 ctx.subprocess，Scanner/Quota 会 fallback 到 node child_process 但我们也给一个真 exec）----
+  // ---- real subprocess execution (GatewayTool must use ctx.subprocess; Scanner/Quota fall back to node child_process, but we provide a real exec too) ----
   subprocess: {
     async exec(cmd, args, opts = {}) {
       return await new Promise((resolve) => {
@@ -65,7 +65,7 @@ const ctx = {
       });
     },
   },
-  // ---- ctx.tools: DSH 真正的工具注册入口。这里记录所有 define 调用，返回带 dispose 的句柄（我们不真实注册）----
+  // ---- ctx.tools: DSH's real tool registration entry point. Records every define call and returns a handle with dispose (we do not register for real) ----
   tools: {
     define(def) {
       toolsCalls.push({ action: 'define', name: def.name, description: def.description?.slice(0, 40) });
@@ -74,7 +74,7 @@ const ctx = {
       };
     },
   },
-  // ---- events: 实现 Cordis 最小事件 on/emit/off（我们没有用 EventEmitter2，自己写一个）----
+  // ---- events: minimal Cordis-style on/emit/off (no EventEmitter2; hand-rolled) ----
   _eventHandlers: new Map(),
   on(event, handler) {
     let arr = this._eventHandlers.get(event);
@@ -84,49 +84,49 @@ const ctx = {
   },
   off(event, handler) { this._eventHandlers.get(event)?.delete(handler); },
   emit(event, payload) { for (const h of this._eventHandlers.get(event) ?? []) { try { h(payload); } catch {} } },
-  // ---- ctx.set (duck-typing 为 Cordis ctx.set) ----
+  // ---- ctx.set (duck-typed as Cordis ctx.set) ----
   _props: {},
   set(key, value) { this._props[key] = value; },
   get(key) { return this._props[key]; },
-  // ---- ctx.plugin（子插件挂载，插件入口会用到）----
+  // ---- ctx.plugin (sub-plugin mounting; used by the plugin entry) ----
   plugin: () => {
-    // 简化：当 plugins 里的 cliPlugin/webPlugin 被手动 apply 时，不需要真实 Cordis，
-    // 我们在 apply 里的 fallback 路径（检测 ctx.plugin 是否可调用）会自动 duck-typing 绕过。
+    // Simplified: when cliPlugin/webPlugin inside plugins are applied manually, real Cordis is not needed;
+    // the fallback path in apply (checking whether ctx.plugin is callable) duck-types its way around automatically.
   },
 };
 
-// =============== 3. apply 插件 ===============
-console.log('\x1b[1m--- Phase 1: 插件装配 apply(ctx) ---\x1b[0m');
+// =============== 3. Apply the plugin ===============
+console.log('\x1b[1m--- Phase 1: plugin assembly apply(ctx) ---\x1b[0m');
 try {
   await apply(ctx);
   const svc = ctx.cliHub ?? ctx.get?.('cliHub');
-  if (!svc) throw new Error('apply(ctx) 之后 ctx.cliHub 未挂载');
-  ok('apply: ctx.cliHub 挂载', `service shape = scan/registry/quota/tools/agents = ${!!svc.scan}/${!!svc.registry}/${!!svc.quota}/${!!svc.tools}/${!!svc.agents}`);
+  if (!svc) throw new Error('ctx.cliHub not mounted after apply(ctx)');
+  ok('apply: ctx.cliHub mounted', `service shape = scan/registry/quota/tools/agents = ${!!svc.scan}/${!!svc.registry}/${!!svc.quota}/${!!svc.tools}/${!!svc.agents}`);
 } catch (e) {
-  fail('apply: 插件装配', e);
-  console.log('\n[e2e] 装配失败，终止后续步骤');
+  fail('apply: plugin assembly', e);
+  console.log('\n[e2e] assembly failed; aborting remaining steps');
   process.exit(1);
 }
 const cliHub = ctx.cliHub;
 
-// =============== 4. 注册一个最小假 adapter 给 ToolGateway 测试 + 开始 ctx.tools.define 记录验证 ===============
-console.log('\n\x1b[1m--- Phase 2: P1-8 ToolGateway 注册 ctx.tools.define 验证 ---\x1b[0m');
+// =============== 4. Register a minimal fake adapter for the ToolGateway test + verify ctx.tools.define call recording ===============
+console.log('\n\x1b[1m--- Phase 2: P1-8 ToolGateway registration via ctx.tools.define ---\x1b[0m');
 try {
   const echoAdapter = defineCliAdapter({
     id: 'echo-smoke',
     name: 'Echo Smoke',
-    description: 'e2e 用的 echo 工具，用于验证 tools.define 被真调用',
+    description: 'echo tool for e2e, used to verify tools.define is really called',
     fingerprint: { commandNames: ['echo'] },
     capabilities: {
       tools: [{
         dshToolName: 'cli-hub:echo-smoke:say',
-        description: '回显输入，e2e 测试',
+        description: 'Echoes the input back; e2e test',
         inputSchema: { type: 'object', required: ['message'], properties: { message: { type: 'string' } } },
         commandMapping: { kind: 'template', template: 'echo {{message}}' },
         outputParser: 'stdout-text',
       }, {
         dshToolName: 'cli-hub:echo-smoke:reverse',
-        description: '反向回显',
+        description: 'Echoes the input reversed',
         inputSchema: { type: 'object', required: ['message'], properties: { message: { type: 'string' } } },
         commandMapping: { kind: 'template', template: "bash -c 'echo {{message}} | rev'" },
         outputParser: 'stdout-text',
@@ -137,7 +137,7 @@ try {
   });
   cliHub.registry.register(echoAdapter);
 
-  // 构造一个 ScanItem 触发 ToolGateway.syncRegistrations
+  // build a ScanItem to trigger ToolGateway.syncRegistrations
   const item = {
     adapterId: 'echo-smoke',
     executablePath: '/bin/echo',
@@ -147,15 +147,15 @@ try {
   };
   await cliHub.tools.syncRegistrations([item]);
   const defineCount = toolsCalls.filter(c => c.action === 'define').length;
-  if (defineCount === 0) throw new Error('ctx.tools.define 一次都没被调');
-  ok(`tools.syncRegistrations: ctx.tools.define 被调用 ${defineCount} 次`,
+  if (defineCount === 0) throw new Error('ctx.tools.define was never called');
+  ok(`tools.syncRegistrations: ctx.tools.define called ${defineCount} time(s)`,
       toolsCalls.map(c=>`${c.action}:${c.name}`).join(', '));
-} catch (e) { fail('P1-8 ToolGateway 注册', e); }
+} catch (e) { fail('P1-8 ToolGateway registration', e); }
 
-// =============== 5. Scanner L3 扫本机真实 claude ===============
-console.log('\n\x1b[1m--- Phase 3: 真实 Scanner L3 扫本机 PATH (探测 claude) ---\x1b[0m');
+// =============== 5. Scanner L3 against the real local claude ===============
+console.log('\n\x1b[1m--- Phase 3: real Scanner L3 over the local PATH (probing claude) ---\x1b[0m');
 try {
-  // 确保 ~/.local/bin 在 PATH（scan 里面读的 process.env.PATH，所以这里要 export）
+  // make sure ~/.local/bin is on PATH (scan reads process.env.PATH, so export it here)
   const localBin = `${process.env.HOME}/.local/bin`;
   if (!process.env.PATH.split(':').includes(localBin)) process.env.PATH = localBin + ':' + process.env.PATH;
 
@@ -163,36 +163,36 @@ try {
   const items = Array.isArray(result) ? result : (result?.items ?? []);
   const hit = items.find(i => i.adapterId === 'claude-code');
   if (!hit) {
-    console.warn('   [warn] 未发现 claude-code（当前 PATH: ' + process.env.PATH.split(':').slice(0,5).join(':') + ':...' + '）');
-    fail('Scanner L3: 发现 claude-code', new Error('没命中，可能 PATH 没包含 ~/.local/bin'));
+    console.warn('   [warn] claude-code not found (current PATH: ' + process.env.PATH.split(':').slice(0,5).join(':') + ':...' + ')');
+    fail('Scanner L3: discover claude-code', new Error('no hit; PATH may not include ~/.local/bin'));
   } else {
     const extras = [];
     if (hit.version) extras.push(`version=${hit.version}`);
     if (hit.authState) extras.push(`auth=${hit.authState}`);
     if (hit.metadata) extras.push(`metadataKeys=${Object.keys(hit.metadata).join(',')}`);
-    ok(`Scanner L3: 发现 claude-code @ ${hit.commandName}`, extras.join(' | '));
+    ok(`Scanner L3: discovered claude-code @ ${hit.commandName}`, extras.join(' | '));
     if (hit.version) {
       const is2 = /^[23]\./.test(hit.version);
-      is2 ? ok('Scanner 版本解析非空且 >= 2.x', hit.version) : fail('Scanner 版本解析', new Error('版本 ' + hit.version + ' 异常'));
+      is2 ? ok('Scanner version parsed and >= 2.x', hit.version) : fail('Scanner version parsing', new Error('unexpected version ' + hit.version));
     }
     if (hit.authState === 'authenticated') {
-      ok('Scanner authState = authenticated (已登录)');
+      ok('Scanner authState = authenticated (logged in)');
     } else {
-      console.warn(`   [warn] authState = ${hit.authState}，authCheck 可能需要调整 regex`);
+      console.warn(`   [warn] authState = ${hit.authState}; the authCheck regex may need adjusting`);
     }
   }
-} catch (e) { fail('Scanner L3 扫 claude', e); }
+} catch (e) { fail('Scanner L3 scan for claude', e); }
 
-// =============== 6. AgentGateway 端到端（临时假脚本） ===============
-console.log('\n\x1b[1m--- Phase 4: AgentGateway 端到端（假脚本模拟 jsonrpc + line-based） ---\x1b[0m');
+// =============== 6. AgentGateway end-to-end (temp fake scripts) ===============
+console.log('\n\x1b[1m--- Phase 4: AgentGateway end-to-end (fake scripts simulating jsonrpc + line-based) ---\x1b[0m');
 const tmpdir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-hub-e2e-'));
 console.log(`   tmpdir = ${tmpdir}`);
 try {
-  // ---- 6a. 注册两个假 adapter ----
+  // ---- 6a. register two fake adapters ----
   const jsonrpcShim = path.join(tmpdir, 'fake-jsonrpc-agent.sh');
   fs.writeFileSync(jsonrpcShim, [
     '#!/bin/sh',
-    '# 模拟 stdio-jsonrpc 协议',
+    '# simulate the stdio-jsonrpc protocol',
     "echo '{\"jsonrpc\":\"2.0\",\"method\":\"$/progress\",\"params\":{\"token\":\"banner\",\"value\":{\"kind\":\"begin\",\"message\":\"FAKE SERVER READY\"}}}'",
     "echo '__JSONRPC_READY__'",
     'while IFS= read -r LINE; do',
@@ -215,11 +215,11 @@ try {
     '',
   ].join('\n'), { mode: 0o755 });
 
-  // ---- 注册两个 Agent-only adapter ----
+  // ---- register the two agent-only adapters ----
   const jsonrpcAd = defineCliAdapter({
     id: 'e2e-jsonrpc',
     name: 'E2E JsonRpc',
-    description: '假脚本',
+    description: 'fake script',
     fingerprint: { commandNames: ['fake-jsonrpc-agent.sh'] },
     capabilities: {
       agent: {
@@ -233,7 +233,7 @@ try {
   const lineAd = defineCliAdapter({
     id: 'e2e-line',
     name: 'E2E Line',
-    description: '假脚本',
+    description: 'fake script',
     fingerprint: { commandNames: ['fake-line-agent.sh'] },
     capabilities: {
       agent: {
@@ -250,11 +250,11 @@ try {
   // ---- 6b. JsonRpc spawn + ready + request ----
   {
     const s = await cliHub.agents.spawn('e2e-jsonrpc', { timeoutMs: 10_000 });
-    ok(`AgentGateway.spawn jsonrpc pid=${s.pid}`, `status=waiting-ready→${s.status}`);
+    ok(`AgentGateway.spawn jsonrpc pid=${s.pid}`, `status=waiting-ready->${s.status}`);
     const resp = await s.request('tools/list', {}, 6000);
-    // AgentGateway.request 已拆包，直接是解析后的 result body
-    if (resp?.capabilities?.echo !== true) throw new Error('jsonrpc result 不对: ' + JSON.stringify(resp));
-    ok('AgentGateway jsonrpc: request → 路由到对应 id 并解析 result', JSON.stringify(resp));
+    // AgentGateway.request already unwraps; this is the parsed result body directly
+    if (resp?.capabilities?.echo !== true) throw new Error('unexpected jsonrpc result: ' + JSON.stringify(resp));
+    ok('AgentGateway jsonrpc: request -> routed by id and result parsed', JSON.stringify(resp));
     await s.shutdown();
     ok(`AgentGateway jsonrpc: graceful shutdown`, `exit=${s.exitCode ?? null} endedAt set=${!!s.endedAt}`);
   }
@@ -264,35 +264,35 @@ try {
     const s = await cliHub.agents.spawn('e2e-line', { timeoutMs: 10_000 });
     ok(`AgentGateway.spawn line-based pid=${s.pid}`);
     await s.send('hi line agent');
-    // recv 返回 { line: string }（doc 见 gateway-agent.ts AgentSession.recv）
+    // recv returns { line: string } (see gateway-agent.ts AgentSession.recv)
     const wrap = await s.recv(6000);
     const line = typeof wrap === 'object' ? (wrap?.line ?? '') : String(wrap);
-    if (!String(line).includes('echo: hi line agent')) throw new Error('line 回显不对: ' + JSON.stringify(wrap));
+    if (!String(line).includes('echo: hi line agent')) throw new Error('unexpected echo line: ' + JSON.stringify(wrap));
     ok('AgentGateway line-based: send → recv', String(line).trim());
     await s.shutdown();
     ok(`AgentGateway line-based: shutdown`, `endedAt set=${!!s.endedAt}`);
   }
 
-  // ---- 6d. stopAll: 同时 spawn 两个，确认 stopAll 清理 ----
+  // ---- 6d. stopAll: spawn two at once, then confirm stopAll cleans up ----
   const sA = await cliHub.agents.spawn('e2e-line', { timeoutMs: 8000 });
   const sB = await cliHub.agents.spawn('e2e-jsonrpc', { timeoutMs: 8000 });
   const n = cliHub.agents.listSessions().length;
-  ok('AgentGateway 并行 session 数 = ' + n, '预期 = 2');
-  if (n !== 2) fail('AgentGateway 并行 session 数', new Error('listSessions().length 不是 2，而是 ' + n));
+  ok('AgentGateway parallel session count = ' + n, 'expected = 2');
+  if (n !== 2) fail('AgentGateway parallel session count', new Error('listSessions().length is ' + n + ', expected 2'));
   await cliHub.agents.stopAll();
   const remain = cliHub.agents.listSessions().length;
-  remain === 0 ? ok('AgentGateway.stopAll 清理', '剩余 session = 0') : fail('AgentGateway.stopAll 清理', new Error('剩余 ' + remain));
-} catch (e) { fail('AgentGateway 端到端', e); }
+  remain === 0 ? ok('AgentGateway.stopAll cleanup', 'remaining sessions = 0') : fail('AgentGateway.stopAll cleanup', new Error(remain + ' remaining'));
+} catch (e) { fail('AgentGateway end-to-end', e); }
 finally {
-  // 确保所有进程都杀掉
+  // make sure every spawned process is killed
   try { await cliHub.agents.stopAll(); } catch {}
   try { fs.rmSync(tmpdir, { recursive: true, force: true }); } catch {}
 }
 
-// =============== 6b. Web UI 挂载（Phase 5：验证 settings 注册/内存 ui API/真实开关） ===============
-console.log('\n\x1b[1m--- Phase 5: Web UI 挂载（Scanner 展示 + Adapter 开关） ---\x1b[0m');
+// =============== 6b. Web UI mounting (Phase 5: settings registration / in-memory ui API / real toggles) ===============
+console.log('\n\x1b[1m--- Phase 5: Web UI mounting (scanner display + adapter toggles) ---\x1b[0m');
 {
-  // settings/clientPages 假 ctx 注入
+  // inject a fake settings/clientPages ctx
   const fakeSettings = {};
   fakeSettings.registerSection = function (s) { fakeSettings.last = s; return s; };
   const ctx2 = ctx;
@@ -302,103 +302,103 @@ console.log('\n\x1b[1m--- Phase 5: Web UI 挂载（Scanner 展示 + Adapter 开�
     get: (route, h) => ((ctx2._routesGet = ctx2._routesGet || []).push({ route, h })),
     post: (route, h) => ((ctx2._routesPost = ctx2._routesPost || []).push({ route, h })),
   };
-  // web 子插件：使用第一次 import 时捕获到的 webSubPlugin 直接 apply（避免 cache-bust 导致的重复实例化）
+  // web sub-plugin: apply the webSubPlugin captured on first import directly (avoids duplicate instantiation from cache-busting)
   try {
     if (webSubPlugin && typeof webSubPlugin.apply === 'function') {
       webSubPlugin.apply(ctx);
     } else {
-      throw new Error('PKG.webSubPlugin 不存在（src/index.ts 是否 export const webSubPlugin = webPlugin?）');
+      throw new Error('PKG.webSubPlugin missing (does src/index.ts export const webSubPlugin = webPlugin?)');
     }
   } catch (e) {
-    fail('Web 子插件挂载', new Error('apply webPlugin failed: ' + (e?.message ?? String(e))));
+    fail('Web sub-plugin mounting', new Error('apply webPlugin failed: ' + (e?.message ?? String(e))));
   }
 
-  // --- P5-1: settings.registerSection 注册成功且 id=cli-hub ---
-  if (!fakeSettings.last) fail('settings.registerSection 调用', new Error('未调用 registerSection'));
+  // --- P5-1: settings.registerSection registered successfully with id=cli-hub ---
+  if (!fakeSettings.last) fail('settings.registerSection call', new Error('registerSection was never called'));
   else {
-    ok('Web UI: settings.registerSection 注册', 'id=' + fakeSettings.last.id);
-    if (fakeSettings.last.id !== 'cli-hub') fail('section id 错误', new Error(fakeSettings.last.id));
+    ok('Web UI: settings.registerSection registered', 'id=' + fakeSettings.last.id);
+    if (fakeSettings.last.id !== 'cli-hub') fail('wrong section id', new Error(fakeSettings.last.id));
     const r = fakeSettings.last.render();
     Array.isArray(r && r.sections)
-      ? ok('Web UI: settings.render 产出 sections 数组', 'count=' + r.sections.length)
-      : fail('settings.render', new Error('sections 不是数组'));
+      ? ok('Web UI: settings.render produced a sections array', 'count=' + r.sections.length)
+      : fail('settings.render', new Error('sections is not an array'));
   }
 
-  // --- P5-2: ctx.router.get/post 已注册（HTTP API 兜底路径）---
+  // --- P5-2: ctx.router.get/post registered (HTTP API fallback path) ---
   const got = ctx2._routesGet || [];
   const post = ctx2._routesPost || [];
   const routes = got.concat(post);
-  if (routes.length >= 5) ok('Web UI: HTTP 路由已注册', 'GET=' + got.length + ' POST=' + post.length + '（覆盖 dashboard/adapters/scan/sessions/action）');
-  else fail('HTTP 路由注册', new Error('路由太少 ' + routes.length));
+  if (routes.length >= 5) ok('Web UI: HTTP routes registered', 'GET=' + got.length + ' POST=' + post.length + ' (covers dashboard/adapters/scan/sessions/action)');
+  else fail('HTTP route registration', new Error('too few routes: ' + routes.length));
 
-  // --- P5-3: 内存 ui API — dashboard/adapterRows 至少含 claude-code，且 version/auth 正确 ---
+  // --- P5-3: in-memory ui API — dashboard/adapterRows include claude-code with correct version/auth ---
   const ui = ctx.cliHub.ui;
-  if (!ui) fail('cliHub.ui 内存 API', new Error('不存在'));
+  if (!ui) fail('cliHub.ui in-memory API', new Error('missing'));
   else {
     const d = await ui.getDashboard();
     ok('Web UI: ui.getDashboard shape ok', 'adaptersTotal=' + d.adaptersTotal + ' sessionsCount=' + d.sessionsCount);
-    if (d.adaptersTotal < 1) fail('dashboard adaptersTotal', new Error('为 0'));
+    if (d.adaptersTotal < 1) fail('dashboard adaptersTotal', new Error('is 0'));
     const adapters = await ui.getAdapterRows();
     const cc = adapters.find((x) => x.id === 'claude-code');
-    if (!cc) fail('adapter row claude-code', new Error('未找到'));
+    if (!cc) fail('adapter row claude-code', new Error('not found'));
     else {
-      ok('Web UI: adapter row 有 claude-code', 'defaultEnabled=' + cc.defaultEnabled);
-      if (typeof cc.enabled === 'boolean') ok('Web UI: adapter.enabled 可投影', String(cc.enabled));
-      else fail('adapter.enabled 字段', new Error('不是 boolean'));
+      ok('Web UI: adapter rows include claude-code', 'defaultEnabled=' + cc.defaultEnabled);
+      if (typeof cc.enabled === 'boolean') ok('Web UI: adapter.enabled projects correctly', String(cc.enabled));
+      else fail('adapter.enabled field', new Error('not a boolean'));
     }
-    // Scanner 投影
+    // scanner projection
     const rows = await ui.getScannerRows('l1');
-    if (Array.isArray(rows)) ok('Web UI: getScannerRows 返回数组', 'rows=' + rows.length);
-    else fail('getScannerRows', new Error('不是数组'));
-    // dispatch 真实触发开关
+    if (Array.isArray(rows)) ok('Web UI: getScannerRows returns an array', 'rows=' + rows.length);
+    else fail('getScannerRows', new Error('not an array'));
+    // dispatch really triggers the toggle
     const res = await ui.dispatch('toggle-adapter', { adapterId: 'claude-code', enabled: false });
-    if (res && res.ok === true) ok('Web UI: dispatch(toggle-adapter → disable)', String(res.message || ''));
+    if (res && res.ok === true) ok('Web UI: dispatch(toggle-adapter -> disable)', String(res.message || ''));
     else fail('dispatch toggle disable', new Error(JSON.stringify(res)));
-    // disable 后 registry 应该是 enabled=false
+    // after disable, registry should be enabled=false
     const afterDisable = ctx.cliHub.registry && ctx.cliHub.registry.isEnabled && ctx.cliHub.registry.isEnabled('claude-code');
-    if (afterDisable === false) ok('Web UI: disable → registry enabled=false', '已持久化');
-    else fail('registry 状态同步', new Error('enabled not false: ' + afterDisable));
-    // 恢复回来
+    if (afterDisable === false) ok('Web UI: disable -> registry enabled=false', 'persisted');
+    else fail('registry state sync', new Error('enabled not false: ' + afterDisable));
+    // restore
     await ui.dispatch('toggle-adapter', { adapterId: 'claude-code', enabled: true });
     if (ctx.cliHub.registry && ctx.cliHub.registry.isEnabled && ctx.cliHub.registry.isEnabled('claude-code') === true) ok('Web UI: re-enable ok', '');
-    else fail('registry enable 恢复', new Error('状态未回到 true'));
+    else fail('registry re-enable', new Error('state did not return to true'));
   }
 
-  // --- P5-4: Scanner 投影不包含非法 undefined 字段 ---
+  // --- P5-4: scanner projection contains no illegal undefined fields ---
   if (ctx.cliHub && ctx.cliHub.ui) {
     const allRows = await ctx.cliHub.ui.getScannerRows('l1');
     const serializable = !JSON.stringify(allRows).includes('undefined');
-    if (serializable) ok('Web UI: Scanner Rows serializable（无 undefined 字段残留）', '');
-    else fail('序列化失败', new Error('JSON 中含有 undefined 字段'));
+    if (serializable) ok('Web UI: scanner rows serializable (no leftover undefined fields)', '');
+    else fail('serialization failed', new Error('JSON contains undefined fields'));
   } else {
-    fail('Scanner 序列化校验', new Error('ui 不存在，跳过'));
+    fail('Scanner serialization check', new Error('ui missing; skipped'));
   }
 
-  // --- P5-5 (P2): 新增视图函数 getQuotaRows / getToolRows / getAdapterDetail ---
+  // --- P5-5 (P2): new view functions getQuotaRows / getToolRows / getAdapterDetail ---
   if (ctx.cliHub && ctx.cliHub.ui) {
     const ui = ctx.cliHub.ui;
     // getQuotaRows
     const quotaRows = await ui.getQuotaRows();
-    if (Array.isArray(quotaRows)) ok('Web UI: getQuotaRows 返回数组', 'rows=' + quotaRows.length);
-    else fail('getQuotaRows', new Error('不是数组'));
+    if (Array.isArray(quotaRows)) ok('Web UI: getQuotaRows returns an array', 'rows=' + quotaRows.length);
+    else fail('getQuotaRows', new Error('not an array'));
 
     // getToolRows
     const toolRows = await ui.getToolRows();
-    if (Array.isArray(toolRows)) ok('Web UI: getToolRows 返回数组', 'rows=' + toolRows.length);
-    else fail('getToolRows', new Error('不是数组'));
+    if (Array.isArray(toolRows)) ok('Web UI: getToolRows returns an array', 'rows=' + toolRows.length);
+    else fail('getToolRows', new Error('not an array'));
 
     // getAdapterDetail
     const detail = await ui.getAdapterDetail('claude-code');
     if (detail && detail.id === 'claude-code') {
       ok('Web UI: getAdapterDetail shape ok', 'id=' + detail.id + ' hasTools=' + !!(detail.capabilities && detail.capabilities.tools) + ' hasAgent=' + !!(detail.capabilities && detail.capabilities.agent));
-      // 序列化校验
+      // serialization check
       const s = JSON.stringify(detail);
       if (!s.includes('undefined')) ok('Web UI: adapterDetail serializable', '');
-      else fail('adapterDetail 序列化', new Error('含 undefined'));
-    } else fail('getAdapterDetail', new Error('返回 null 或 id 不匹配'));
+      else fail('adapterDetail serialization', new Error('contains undefined'));
+    } else fail('getAdapterDetail', new Error('returned null or id mismatch'));
   }
 
-  // --- P5-6 (P2): 新 HTTP 端点 /quota /tools /adapters/:id 已注册 ---
+  // --- P5-6 (P2): new HTTP endpoints /quota /tools /adapters/:id registered ---
   const allRoutes = (ctx2._routesGet || []).concat(ctx2._routesPost || []).map(r => r.route);
   const expectNew = [
     '/plugins/cli-hub/api/quota', '/cli-hub/api/quota',
@@ -409,10 +409,10 @@ console.log('\n\x1b[1m--- Phase 5: Web UI 挂载（Scanner 展示 + Adapter 开�
     '/plugins/cli-hub/api/events', '/cli-hub/api/events',
   ];
   const missing = expectNew.filter(r => !allRoutes.includes(r));
-  if (missing.length === 0) ok('Web UI: P2 新 HTTP 端点已注册', 'count=' + expectNew.length);
-  else fail('P2 新端点缺失', new Error('missing: ' + missing.join(', ')));
+  if (missing.length === 0) ok('Web UI: P2 new HTTP endpoints registered', 'count=' + expectNew.length);
+  else fail('P2 endpoints missing', new Error('missing: ' + missing.join(', ')));
 
-  // --- P5-7 (P2): dispatch 新动作（show-install-hint / adapter-detail / quota-refresh）---
+  // --- P5-7 (P2): dispatch the new actions (show-install-hint / adapter-detail / quota-refresh) ---
   if (ctx.cliHub && ctx.cliHub.ui) {
     const ui = ctx.cliHub.ui;
     // show-install-hint
@@ -426,9 +426,9 @@ console.log('\n\x1b[1m--- Phase 5: Web UI 挂载（Scanner 展示 + Adapter 开�
   }
 }
 
-// =============== 7. 汇总 ===============
+// =============== 7. Summary ===============
 process.exitCode = process.exitCode || 0;
-console.log('\n\x1b[1m=== e2e 结束 ===\x1b[0m');
+console.log('\n\x1b[1m=== e2e finished ===\x1b[0m');
 console.log(process.exitCode === 0
-  ? '\x1b[32m 全部通过 ✅\x1b[0m'
-  : '\x1b[31m 有失败项，exit code = ' + process.exitCode + ' ❌\x1b[0m');
+  ? '\x1b[32m All passed \u2705\x1b[0m'
+  : '\x1b[31m Some checks failed, exit code = ' + process.exitCode + ' \u274c\x1b[0m');

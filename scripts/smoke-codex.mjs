@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * smoke-codex.mjs — Codex CLI Tool 模式冒烟测试。
+ * smoke-codex.mjs — Codex CLI Tool-mode smoke test.
  *
- * 只验证 `codex --version` / `codex exec --help` 是否有 Codex 的接口存在；
- * 真执行 exec 需要登录态，所以这里用 `--help` / `--version` 路径当"命令结构 OK"
- * 证据；失败就 SKIP。
+ * Only verifies that `codex --version` / `codex exec --help` show Codex's interface exists;
+ * actually running exec requires a logged-in state, so the `--help` / `--version` paths serve as
+ * "command structure OK" evidence; on failure, SKIP.
  *
- * 用法：node scripts/smoke-codex.mjs
+ * Usage: node scripts/smoke-codex.mjs
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 
@@ -45,7 +45,7 @@ async function main() {
     else skip(1, `version probe failed; stderr="${String(v.stderr||v2.stderr).slice(0,200)}"`);
   }
 
-  console.log('\n[2] codex exec --help 列出参数（验证 argv 结构）');
+  console.log('\n[2] codex exec --help lists arguments (verify argv structure)');
   const h = run(bin, ['exec', '--help']);
   if (!h.ok) {
     const h2 = run(bin, ['--help']);
@@ -54,17 +54,17 @@ async function main() {
   } else {
     const txt = (h.stdout + (h.stderr || '')).toLowerCase();
     if (/--model|--cwd|--json|prompt|task/.test(txt)) pass(2);
-    else fail(2, `exec help 输出里没看到已知 flag。first 300: ${(h.stdout||'').slice(0,300)}`);
+    else fail(2, `exec help output shows no known flags. first 300: ${(h.stdout||'').slice(0,300)}`);
   }
 
-  console.log('\n[3] (dry) 验证 argv 映射结构：codex exec --json + positional task 能被 Codex 正确识别为 help/usage 错误而不是"unknown flag"（无登录态不真调用）');
-  // 如果 codex 把 `exec --json --cwd /tmp "say hi"` 中的 --json 视为 unknown flag，就说明 argv 结构和 adapter 声明不匹配。
-  // 因为可能没登录，我们只要看 stderr/stdout 不含有 "unknown option: --json" 就算过；exit 非零由登录导致可以接受。
+  console.log('\n[3] (dry) verify argv mapping structure: codex exec --json + positional task is correctly recognized by Codex as a help/usage error rather than "unknown flag" (no real invocation without login)');
+  // If codex treats --json in `exec --json --cwd /tmp "say hi"` as an unknown flag, the argv structure does not match the adapter declaration.
+  // Since we may not be logged in, we only require that stderr/stdout does not contain "unknown option: --json" to pass; a non-zero exit caused by missing login is acceptable.
   const args = ['exec', '--json', '--cwd', process.cwd(), 'dry probe from smoke-codex (please ignore this run)'];
   const d = run(bin, args, 20_000);
   const combo = (d.stdout || '') + '\n' + (d.stderr || '');
   if (/unknown (option|flag|argument):.*(--json|--cwd)/i.test(combo)) {
-    fail(3, `argv 映射不匹配：Codex 不认识 --json/--cwd flag。输出：${combo.slice(0,300)}`);
+    fail(3, `argv mapping mismatch: Codex does not recognize the --json/--cwd flags. Output: ${combo.slice(0,300)}`);
   } else {
     console.log('   (exit non-zero or warn about auth / rate limit is acceptable for dry probe)');
     pass(3);

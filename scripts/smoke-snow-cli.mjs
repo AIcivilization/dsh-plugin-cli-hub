@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * smoke-snow-cli.mjs — Snow CLI Tool 模式冒烟测试。
+ * smoke-snow-cli.mjs — Snow CLI Tool-mode smoke test.
  *
- * 真环境验证 4 个 Tool：translate（最快，不涉及资源）/ draw / tts / asr（最后两个需要输入样本，
- * 没样本或没装 ffmpeg 的就 SKIP）。
+ * Verifies 4 Tools in a real environment: translate (fastest, no resources involved) / draw / tts / asr
+ * (the last two need input samples; SKIP if no sample or ffmpeg is not installed).
  *
- * 如果本机：
- *   · 没有 `snow` 可执行文件 → 整体 SKIP（exit 0）
- *   · `snow quota` 返回"未登录"→ translate 也 SKIP
- *   · 单个 Tool 失败 → 单个 FAIL，不阻断其他
+ * On this machine:
+ *   · No `snow` executable → overall SKIP (exit 0)
+ *   · `snow quota` returns "not logged in" → translate is also SKIPped
+ *   · A single Tool fails → a single FAIL, does not block the others
  *
- * 用法：node scripts/smoke-snow-cli.mjs
+ * Usage: node scripts/smoke-snow-cli.mjs
  */
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
