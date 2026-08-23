@@ -24,6 +24,7 @@ import type {
   ScanResult,
   ScanDepth,
 } from '../core/types';
+import { DASHBOARD_HTML } from './dashboard-html';
 
 export const name = 'dsh-plugin-cli-hub/web';
 // Same design decision as the main plugin: all ctx properties go through safeGet, inject is empty (always activatable)
@@ -1014,6 +1015,9 @@ function mountHttpPath(
     };
 
     const routes = [
+      // ---- Dashboard HTML page: exact routes (must NOT be 'prefix', or /cli-hub would swallow /cli-hub/api/*) ----
+      reg('exact', 'GET', '/cli-hub', async (req, res) => sendHtml(res, 200, DASHBOARD_HTML)),
+      reg('exact', 'GET', '/plugins/cli-hub/page', async (req, res) => sendHtml(res, 200, DASHBOARD_HTML)),
       reg('prefix', 'GET', '/plugins/cli-hub/api/dashboard', async (req, res) => send(res, 200, await views.getDashboard())),
       reg('prefix', 'GET', '/cli-hub/api/dashboard', async (req, res) => send(res, 200, await views.getDashboard())),
       // adapters list + detail merged into a single prefix route (avoids duplicate path errors):
@@ -1141,6 +1145,7 @@ function mountHttpPath(
   const routesOk = [
     registerOldStyle('get', '/plugins/cli-hub/api/dashboard', async (_req, res) => send(res, 200, await views.getDashboard())),
     registerOldStyle('get', '/cli-hub/api/dashboard', async (_req, res) => send(res, 200, await views.getDashboard())),
+    registerOldStyle('get', '/cli-hub', async (_req, res) => sendHtml(res, 200, DASHBOARD_HTML)),
     registerOldStyle('get', '/plugins/cli-hub/api/adapters', async (_req, res) => send(res, 200, await views.getAdapterRows())),
     registerOldStyle('get', '/cli-hub/api/adapters', async (_req, res) => send(res, 200, await views.getAdapterRows())),
     registerOldStyle('get', '/plugins/cli-hub/api/adapters/:id', async (req, res) => {
@@ -1242,6 +1247,19 @@ function send(res: any, code: number, json: any) {
     if (typeof res.send === 'function') { try { res.send({ status: code, body: payload, headers: { 'Content-Type': 'application/json' } }); return; } catch {} }
   }
   return json;
+}
+
+function sendHtml(res: any, code: number, html: string) {
+  const body = String(html);
+  if (res && typeof res === 'object') {
+    if (typeof res.writeHead === 'function' && typeof res.end === 'function') {
+      try { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(body); return; } catch {}
+    }
+    if (typeof res.setHeader === 'function' && typeof res.end === 'function') {
+      try { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.statusCode = code; res.end(body); return; } catch {}
+    }
+    if (typeof res.send === 'function') { try { res.send(body); return; } catch {} }
+  }
 }
 
 /** Parse query string from a node:http IncomingMessage (the webServer protocol does not go through Koa query). */
