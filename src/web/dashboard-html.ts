@@ -451,6 +451,14 @@ setInterval(function () {
 /* first paint: light data only, no automatic scan */
 loadLight();
 renderScanTable([]);
+/* if this install has never been scanned, run one cheap L1 automatically so the
+   user sees their CLIs right away instead of an empty panel (L3 stays manual) */
+(async function autoFirstScan() {
+  try {
+    var d = await api('/dashboard');
+    if (!d || !d.scannedAt) doScan('l1', $('#btnScanL1'));
+  } catch (e) { /* dashboard unreachable; nothing sensible to do here */ }
+})();
 </script>
 </body>
 </html>`;

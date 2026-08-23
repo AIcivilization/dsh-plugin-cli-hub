@@ -271,6 +271,9 @@ export function apply(ctx: Context, config: Config = {}) {
         },
       };
       await storage.saveLastScan(items);
+      // Publish to the shared view cache so web/CLI projections see fresh data instantly
+      // (views prefer _scanCache over storage reads).
+      (cliHub as any)._scanCache = result;
       // Async: refresh tool registrations for enabled adapters
       queueMicrotask(() => {
         (toolGateway as any).syncRegistrations(items.filter(i => i.adapterId)).catch((e: any) =>
@@ -397,11 +400,23 @@ export function apply(ctx: Context, config: Config = {}) {
     }
   };
   // DSH/Cordis ready hook
+  // Reliability: some profile shapes never emit 'ready' (or emit before we register),
+  // which silently skipped the initial scan + persisted-state restore. Guard with a
+  // once-flag and add a delayed fallback so startup side effects always run exactly once.
+  let readyHandled = false;
+  const onReadyOnce = async () => {
+    if (readyHandled) return;
+    readyHandled = true;
+    await onReady();
+  };
   if (typeof $on === 'function') {
-    try { $on('ready', onReady); }
-    catch { $lifecycle?.onReady?.(onReady) ?? queueMicrotask(onReady); }
+    try {
+      $on('ready', onReadyOnce);
+      const fallback = setTimeout(() => { void onReadyOnce(); }, 3000);
+      if (typeof fallback.unref === 'function') fallback.unref();
+    } catch { $lifecycle?.onReady?.(onReadyOnce) ?? queueMicrotask(onReadyOnce); }
   } else {
-    queueMicrotask(onReady);
+    queueMicrotask(onReadyOnce);
   }
 
   logger.info?.('loaded.');
