@@ -1,7 +1,7 @@
 /**
- * Goose Adapter —— Tool 模式
+ * Goose Adapter — Tool mode
  *
- * Goose：Block 出品的终端 AI Agent。
+ * Goose: terminal AI Agent by Block.
  *   goose run --task "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,7 +10,7 @@ export const gooseAdapter = defineCliAdapter({
   id: 'goose',
   name: 'Goose',
   description:
-    'Block Goose 终端 AI Agent。原生支持多种 LLM provider 与 MCP 工具，可作为 Tool 模式的"任务执行器"使用。',
+    'Block Goose terminal AI Agent. Natively supports multiple LLM providers and MCP tools. Can be used as the "task executor" in Tool mode.',
   icon: '🪿',
   vendor: 'Block',
   officialDoc: 'https://github.com/block/goose',
@@ -31,27 +31,27 @@ export const gooseAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:goose:run-task',
         description:
-          '用本机 Goose 一次性执行一个文本任务并返回结果（自动复用已配置的 LLM API Key/额度）。适合"修改代码/分析文本/草拟内容"等任务。',
+          'Run a one-shot text task on local Goose and return the result (automatically reuses configured LLM API keys/quota). Suited for tasks such as "code modification / text analysis / content drafting".',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认）',
+              description: 'Model name (leave empty for default)',
             },
           } satisfies Record<string, any> as any,
         },

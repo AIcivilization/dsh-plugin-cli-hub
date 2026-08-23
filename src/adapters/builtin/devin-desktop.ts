@@ -1,10 +1,10 @@
 /**
- * Devin Desktop CLI Adapter —— Tool 模式
+ * Devin Desktop CLI Adapter — Tool mode
  *
- * Cognition AI Devin 的桌面端 CLI（devin-desktop 二进制）。
+ * Desktop CLI of Cognition AI Devin (the devin-desktop binary).
  *   devin-desktop run --json "<task>"
  *
- * 复用 Devin 订阅额度。
+ * Reuses your Devin subscription quota.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const devinDesktopAdapter = defineCliAdapter({
   id: 'devin-desktop',
   name: 'Devin Desktop CLI',
   description:
-    'Cognition AI Devin 桌面端 CLI。已订阅 Devin 的用户可直接复用账户额度，作为自主软件工程师 Tool 使用。',
+    'Desktop CLI of Cognition AI Devin. Devin subscribers can reuse their account quota directly and use Devin as an autonomous software engineer tool.',
   icon: '🤖',
   vendor: 'Cognition AI',
   officialDoc: 'https://docs.cognition.ai/devin/desktop',
-  installHint: '在 Devin Desktop 应用内"Install CLI"，或下载 devin-desktop 二进制到 ~/.codeium/windsurf/bin',
+  installHint: '"Install CLI" inside the Devin Desktop app, or download the devin-desktop binary into ~/.codeium/windsurf/bin',
 
   fingerprint: {
     commandNames: ['devin-desktop', 'devin'],
@@ -35,13 +35,13 @@ export const devinDesktopAdapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:devin-desktop:run-task',
-        description: '用 Devin Desktop CLI 执行一个自主软件工程任务。',
+        description: 'Run an autonomous software engineering task via the Devin Desktop CLI.',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '任务描述（如"实现一个登录页面"）' },
-            repo: { type: 'string', description: '目标仓库路径（默认当前 workspace）' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description (e.g. "implement a login page")' },
+            repo: { type: 'string', description: 'Target repository path (defaults to the current workspace)' },
             maxSteps: { type: 'integer', minimum: 1, maximum: 100, default: 30 },
           } satisfies Record<string, any> as any,
         },

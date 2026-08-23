@@ -1,10 +1,10 @@
 /**
- * Kimi CLI Adapter —— Tool 模式（联网搜索、长文档阅读）+ Agent 模式预留
+ * Kimi CLI Adapter — Tool mode (web search, long-document reading) + Agent mode reserved
  *
- * 基于 Moonshot/Kimi CLI 的通用公开协议风格。
+ * Based on the general public protocol style of Moonshot/Kimi CLI.
  *   kimi search --query "..." --json
  *   kimi read --file <path> --mode summary --json
- *   kimi chat --json --stdio  ← （Agent 模式 V2 再接入）
+ *   kimi chat --json --stdio  ← (Agent mode integration in V2)
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const kimiCliAdapter = defineCliAdapter({
   id: 'kimi-cli',
   name: 'Kimi CLI',
   description:
-    '月之暗面 Kimi 官方/社区 CLI。联网搜索能力强、长文档上下文大。可作为 Tool 模式的"搜索引擎 + 长文档阅读器"，也可作为独立子 Agent（后续版本接入）。',
+    'Moonshot AI Kimi official/community CLI. Strong web search capability and large long-document context. Can serve as a "search engine + long-document reader" in Tool mode, or as an independent sub-Agent (integration in a later version).',
   icon: '🌙',
   vendor: 'Moonshot AI',
   officialDoc: 'https://github.com/kimi-open/kimi-cli',
-  installHint: 'pip install kimi-cli 或 npm i -g @moonshot-ai/kimi-cli，然后 kimi auth set-token $KIMI_API_KEY',
+  installHint: 'pip install kimi-cli or npm i -g @moonshot-ai/kimi-cli, then kimi auth set-token $KIMI_API_KEY',
 
   fingerprint: {
     commandNames: ['kimi', 'kimi-cli'],
@@ -33,24 +33,24 @@ export const kimiCliAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 联网搜索 ========
+      // ======== Web search ========
       {
         dshToolName: 'cli-hub:kimi-cli:search',
         description:
-          'Kimi 联网搜索。返回带来源 URL 的真实网页结果，比单纯 LLM 回答更可靠。当用户问到最新信息、需要查证事实、需要引用来源、事件发生在最近 12 个月时，必须优先使用此工具。',
+          'Kimi web search. Returns real web results with source URLs, more reliable than plain LLM answers. Prefer this tool whenever the user asks about the latest information, needs to verify facts, needs to cite sources, or the event occurred within the last 12 months.',
         inputSchema: {
           type: 'object',
           required: ['query'],
           properties: {
-            query: { type: 'string', minLength: 2, maxLength: 500, description: '搜索关键词/问题' },
+            query: { type: 'string', minLength: 2, maxLength: 500, description: 'Search keywords/question' },
             maxResults: { type: 'integer', minimum: 1, maximum: 20, default: 8 },
             freshness: {
               type: 'string',
               enum: ['any', 'day', 'week', 'month', 'year'],
               default: 'any',
-              description: '结果时间范围',
+              description: 'Time range of results',
             },
-            language: { type: 'string', description: '结果语言偏好（zh/en/...），留空自动' },
+            language: { type: 'string', description: 'Result language preference (zh/en/...); automatic if left empty' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
@@ -70,24 +70,24 @@ export const kimiCliAdapter = defineCliAdapter({
         estimatedCredits: 2,
       },
 
-      // ======== 长文档阅读 ========
+      // ======== Long-document reading ========
       {
         dshToolName: 'cli-hub:kimi-cli:read-long',
         description:
-          'Kimi 长文档阅读器。支持超长 PDF/Word/Markdown/TXT（200 万字上下文），输出摘要、要点、Q&A 对。当用户上传长文档、需要全文理解时使用；小文件用 DSH 自带文件工具即可。',
+          'Kimi long-document reader. Supports very long PDF/Word/Markdown/TXT files (2-million-character context) and outputs summaries, key points, and Q&A pairs. Use when the user uploads a long document or needs full-text understanding; for small files, the DSH built-in file tools are enough.',
         inputSchema: {
           type: 'object',
           required: ['file'],
           properties: {
-            file: { type: 'string', description: '文档绝对路径' },
+            file: { type: 'string', description: 'Absolute path to the document' },
             mode: {
               type: 'string',
               enum: ['summary', 'key_points', 'qa', 'outline'],
               default: 'summary',
               description:
-                'summary=自然语言摘要；key_points=要点列表；qa=自问自答 10 对；outline=大纲',
+                'summary=natural-language summary; key_points=list of key points; qa=10 self-generated Q&A pairs; outline=outline',
             },
-            focus: { type: 'string', description: '阅读关注点（如"财务数据""法律条款"），留空综合阅读' },
+            focus: { type: 'string', description: 'Reading focus (e.g., "financial data", "legal terms"); reads comprehensively if left empty' },
             detailLevel: {
               type: 'string',
               enum: ['brief', 'standard', 'detailed'],
@@ -113,7 +113,7 @@ export const kimiCliAdapter = defineCliAdapter({
       },
     ],
 
-    // Agent 模式（V2 里程碑 M4 时启用）—— 先声明占位，Runtime 暂不 spawn
+    // Agent mode (enabled in V2 milestone M4) — declared as a placeholder for now; Runtime does not spawn it yet
     agent: {
       protocol: 'stdio-jsonrpc',
       spawn: {
@@ -124,9 +124,9 @@ export const kimiCliAdapter = defineCliAdapter({
       },
       agentMeta: {
         displayName: 'Kimi Agent',
-        description: 'Kimi 长文档+联网搜索强项的子 Agent',
+        description: 'Sub-Agent with strong long-document reading + web search capabilities',
         avatarEmoji: '🌙',
-        strengths: ['长文档', '搜索', '学术'],
+        strengths: ['Long documents', 'Search', 'Academic'],
       },
       shareDshTools: true,
     },

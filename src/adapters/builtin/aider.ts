@@ -1,7 +1,7 @@
 /**
- * Aider Adapter —— Tool 模式
+ * Aider Adapter —— Tool mode
  *
- * Aider：git-native 编码 Agent，支持与 git 仓库深度协作。
+ * Aider: git-native coding agent with deep git repository integration.
  *   aider --message "<task>" --yes-always
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const aiderAdapter = defineCliAdapter({
   id: 'aider',
   name: 'Aider',
   description:
-    'Aider git-native 编码 Agent。原生支持 git 提交/回滚/分支管理，能基于现有仓库代码做修改。可作为 Tool 模式的"代码修改器"。',
+    'Aider git-native coding agent. Natively supports git commit/rollback/branch management and can make changes based on existing repository code. Usable as a code editor in Tool mode.',
   icon: '🤝',
   vendor: 'Aider',
   officialDoc: 'https://aider.chat',
-  installHint: 'pip install aider-chat，然后 export ANTHROPIC_API_KEY 或 OPENAI_API_KEY',
+  installHint: 'pip install aider-chat, then export ANTHROPIC_API_KEY or OPENAI_API_KEY',
 
   fingerprint: {
     commandNames: ['aider'],
@@ -31,32 +31,32 @@ export const aiderAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== one-shot task execution ========
       {
         dshToolName: 'cli-hub:aider:run-task',
         description:
-          '用本机 Aider 一次性执行一个编码任务并返回结果（自动复用已配置的 LLM API Key/额度）。Aider 会自动 git commit 修改。适合"修改某文件/重构某段代码/补全测试"等任务。',
+          'Run a one-shot coding task with the local Aider and return the result (automatically reuses the configured LLM API key/quota). Aider automatically git commits changes. Suited for tasks like editing a file, refactoring a code section, or completing tests.',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的编码任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Description of the coding task to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g., code snippets, file contents, notes)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace，应当是 git 仓库）',
+              description: 'Working directory for execution (default = current DSH workspace; should be a git repository)',
             },
             files: {
               type: 'array',
               items: { type: 'string' },
-              description: '需要让 Aider 编辑的文件列表',
+              description: 'List of files for Aider to edit',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认，如 claude-sonnet-4）',
+              description: 'Model name (leave empty for default, e.g., claude-sonnet-4)',
             },
           } satisfies Record<string, any> as any,
         },

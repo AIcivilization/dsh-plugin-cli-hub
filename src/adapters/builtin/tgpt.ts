@@ -1,7 +1,7 @@
 /**
- * TGPT Adapter —— Tool 模式
+ * TGPT Adapter — Tool mode
  *
- * aandrew-me/tgpt：终端 ChatGPT，默认无需 API Key 即可用（也支持自定义 provider）。
+ * aandrew-me/tgpt: terminal ChatGPT, usable without an API key by default (custom providers also supported).
  *   tgpt "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,7 +10,7 @@ export const tgptAdapter = defineCliAdapter({
   id: 'tgpt',
   name: 'TGPT',
   description:
-    'aandrew-me/tgpt 终端 ChatGPT。默认无需 API Key 即可使用（走公开反代 provider），也可配置自定义 provider。适合"快速问答/文本生成/翻译"等任务。',
+    'aandrew-me/tgpt terminal ChatGPT. Usable without an API key by default (via public reverse-proxy providers); custom providers configurable too. Suited for quick Q&A / text generation / translation tasks.',
   icon: '🗣️',
   vendor: 'aandrew-me',
   officialDoc: 'https://github.com/aandrew-me/tgpt',
@@ -22,32 +22,32 @@ export const tgptAdapter = defineCliAdapter({
     versionPattern: /tgpt\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.tgpt'],
     envVars: ['OPENAI_API_KEY', 'TGPT_API_KEY', 'TGPT_PROVIDER'],
-    // tgpt 默认无需登录；不强制 authCheck
+    // tgpt requires no login by default; no mandatory authCheck
   },
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:tgpt:run-task',
         description:
-          '用本机 tgpt 一次性执行一个文本任务并返回结果（默认无需 API Key）。适合"快速问答/文本生成/翻译/总结"等任务。',
+          'Run a one-shot text task on local tgpt and return the result (no API key needed by default). Suited for quick Q&A / text generation / translation / summarization tasks.',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             provider: {
               type: 'string',
-              description: 'provider 名（如 openai / phind / groq 等，留空使用默认）',
+              description: 'Provider name (e.g. openai / phind / groq; leave empty for default)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认）',
+              description: 'Model name (leave empty for default)',
             },
           } satisfies Record<string, any> as any,
         },

@@ -1,7 +1,7 @@
 /**
- * Cline Adapter —— Tool 模式
+ * Cline Adapter — Tool mode
  *
- * Cline：开源 VS Code + CLI Agent，支持多种 LLM provider。
+ * Cline: open-source VS Code + CLI Agent supporting multiple LLM providers.
  *   cline run --task "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const clineAdapter = defineCliAdapter({
   id: 'cline',
   name: 'Cline',
   description:
-    'Cline 开源 VS Code + CLI Agent。支持 Anthropic/OpenAI/DeepSeek 等多种 LLM provider，可作为 Tool 模式的"任务执行器"使用。',
+    'Cline open-source VS Code + CLI Agent. Supports multiple LLM providers including Anthropic/OpenAI/DeepSeek. Can be used as the "task executor" in Tool mode.',
   icon: '🤖',
   vendor: 'Cline',
   officialDoc: 'https://github.com/cline/cline',
-  installHint: 'npm i -g @anthropic-ai/cline，然后 export ANTHROPIC_API_KEY 或 OPENAI_API_KEY',
+  installHint: 'npm i -g @anthropic-ai/cline, then export ANTHROPIC_API_KEY or OPENAI_API_KEY',
 
   fingerprint: {
     commandNames: ['cline'],
@@ -31,27 +31,27 @@ export const clineAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:cline:run-task',
         description:
-          '用本机 Cline 一次性执行一个文本任务并返回结果（自动复用已配置的 LLM API Key/额度）。适合"修改代码/分析文本/草拟内容"等任务。',
+          'Run a one-shot text task on local Cline and return the result (automatically reuses configured LLM API keys/quota). Suited for tasks such as "code modification / text analysis / content drafting".',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认）',
+              description: 'Model name (leave empty for default)',
             },
           } satisfies Record<string, any> as any,
         },

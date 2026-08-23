@@ -1,7 +1,7 @@
 /**
- * Cursor CLI Adapter —— Tool 模式
+ * Cursor CLI Adapter - Tool mode
  *
- * Cursor CLI：Cursor IDE 的命令行与 background agent。
+ * Cursor CLI: command line and background agents of Cursor IDE.
  *   cursor run --task "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const cursorCliAdapter = defineCliAdapter({
   id: 'cursor-cli',
   name: 'Cursor CLI',
   description:
-    'Cursor IDE CLI 与 background agent。支持在终端执行编码任务，复用 Cursor 订阅额度，可作为 Tool 模式的"任务执行器"使用。',
+    'Cursor IDE CLI and background agents. Runs coding tasks in the terminal, reusing your Cursor subscription quota; serves as the "task executor" in Tool mode.',
   icon: '🖱️',
   vendor: 'Anysphere',
   officialDoc: 'https://docs.cursor.com',
-  installHint: 'npm i -g @cursor/cli 或在 Cursor IDE 内"Install CLI"，然后 cursor login',
+  installHint: 'npm i -g @cursor/cli, or "Install CLI" inside Cursor IDE, then cursor login',
 
   fingerprint: {
     commandNames: ['cursor', 'cursor-cli', 'cursor-agent'],
@@ -31,27 +31,27 @@ export const cursorCliAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:cursor-cli:run-task',
         description:
-          '用本机 Cursor CLI 一次性执行一个文本任务并返回结果（自动复用 Cursor 订阅额度）。适合"修改代码/分析文本/草拟内容"等任务。',
+          'Run a one-shot text task on local Cursor CLI and return the result (reuses your Cursor subscription quota automatically). Suited for code editing / text analysis / content drafting tasks.',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory to execute in (defaults to the current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认，如 cursor-small / gpt-4o / claude-3.7-sonnet）',
+              description: 'Model name (leave empty for default, e.g. cursor-small / gpt-4o / claude-3.7-sonnet)',
             },
           } satisfies Record<string, any> as any,
         },

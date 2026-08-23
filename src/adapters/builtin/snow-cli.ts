@@ -1,27 +1,27 @@
 /**
- * Snow CLI Adapter（Tool 模式）
+ * Snow CLI Adapter (Tool mode)
  *
- * 参考：Snow CLI 常见命令
- *   snow draw --prompt <text> --out <path>           # 画图
- *   snow translate --text <text> --from zh --to en    # 翻译
- *   snow tts --text <text> --voice xxx --out <path>   # 文生声
- *   snow asr --in <path>                              # 语音转写
- *   snow auth status                                  # 登录状态
- *   snow quota --json                                 # 额度
+ * Reference: common Snow CLI commands
+ *   snow draw --prompt <text> --out <path>           # image generation
+ *   snow translate --text <text> --from zh --to en    # translation
+ *   snow tts --text <text> --voice xxx --out <path>   # text-to-speech
+ *   snow asr --in <path>                              # speech transcription
+ *   snow auth status                                  # login status
+ *   snow quota --json                                 # quota
  *
- * 注意：命令参数名基于通用 AI CLI 约定；实际 Snow CLI 若参数名不同，用户可以通过
- *       registry 的 adapterOverrides 覆盖 commandMapping.template。
+ * Note: command argument names follow common AI CLI conventions; if the actual Snow CLI uses
+ *       different argument names, users can override commandMapping.template via registry adapterOverrides.
  */
 import { defineCliAdapter } from '../define';
 
 export const snowCliAdapter = defineCliAdapter({
   id: 'snow-cli',
   name: 'Snow CLI',
-  description: 'Snowflake AI 官方 CLI，提供画图、机器翻译、文生语音、语音转写等多模态能力。直接复用 Snow 账户已订阅额度。',
+  description: 'Snowflake AI official CLI providing multimodal capabilities such as image generation, machine translation, text-to-speech, and speech transcription. Directly reuses the Snow account subscription quota.',
   icon: '❄️',
   vendor: 'Snowflake AI',
   officialDoc: 'https://docs.snowflake.com/en/user-guide/snow-cli',
-  installHint: 'npm i -g @snowflake-ai/snow-cli 或 pip install snow-cli；再执行 snow auth login',
+  installHint: 'npm i -g @snowflake-ai/snow-cli or pip install snow-cli; then run snow auth login',
 
   fingerprint: {
     commandNames: ['snow', 'snow-cli', 'snowflake'],
@@ -39,11 +39,11 @@ export const snowCliAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 画图 ========
+      // ======== Image generation ========
       {
         dshToolName: 'cli-hub:snow-cli:draw',
         description:
-          'Snow CLI 多模态画图。根据提示词生成图片并保存到本地。支持写实/插画/动漫等多种风格。当用户要求画图、生成图片、设计海报、制作插画时使用。',
+          'Snow CLI multimodal image generation. Generates images from a prompt and saves them locally. Supports various styles such as realistic/illustration/anime. Use when the user asks to draw, generate images, design posters, or create illustrations.',
         inputSchema: {
           type: 'object',
           required: ['prompt'],
@@ -52,24 +52,24 @@ export const snowCliAdapter = defineCliAdapter({
               type: 'string',
               minLength: 2,
               maxLength: 1000,
-              description: '图片描述提示词（英文或中文），建议包含主体、风格、光影、构图等要素',
+              description: 'Image description prompt (English or Chinese); recommended to include subject, style, lighting, composition, etc.',
             },
             style: {
               type: 'string',
               enum: ['realistic', 'anime', 'illustration', '3d', 'oil_painting', 'watercolor', 'sketch', 'cyberpunk'],
-              description: '图片风格（可选）',
+              description: 'Image style (optional)',
             },
             size: {
               type: 'string',
               enum: ['512x512', '768x768', '1024x1024', '1024x768', '768x1024', '1536x1024', '1024x1536'],
               default: '1024x1024',
-              description: '图片尺寸',
+              description: 'Image size',
             },
             outFile: {
               type: 'string',
-              description: '输出文件路径（绝对路径或工作目录相对路径），留空会自动生成',
+              description: 'Output file path (absolute or relative to the working directory); auto-generated if left empty',
             },
-            seed: { type: 'integer', minimum: 0, maximum: 4_294_967_295, description: '随机种子（可选，固定种子复现结果）' },
+            seed: { type: 'integer', minimum: 0, maximum: 4_294_967_295, description: 'Random seed (optional; a fixed seed reproduces results)' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
@@ -88,7 +88,7 @@ export const snowCliAdapter = defineCliAdapter({
         outputParser: {
           kind: 'custom',
           fn: (stdout, stderr, code) => {
-            // Snow CLI 画图通常输出生成的路径
+            // Snow CLI image generation usually outputs the generated file path
             if (code !== 0 && !stdout.trim()) throw new Error(stderr || `exit ${code}`);
             const pathMatch = stdout.match(/(?:saved|wrote|output|→|->|generated)[^\n"]*?([/\w.~-]+\.(?:png|jpg|jpeg|webp))/i);
             if (pathMatch) return { status: 'ok', generatedFile: pathMatch[1], raw: stdout.trim() };
@@ -99,30 +99,30 @@ export const snowCliAdapter = defineCliAdapter({
         estimatedCredits: 8,
       },
 
-      // ======== 翻译 ========
+      // ======== Translation ========
       {
         dshToolName: 'cli-hub:snow-cli:translate',
         description:
-          'Snow CLI 高质量机器翻译。支持中英日韩法德西意俄阿葡等 100+ 语言。当用户需要翻译文本、翻译文档片段、本地化内容时使用。通常比 LLM 自翻译更稳定、更省 token。',
+          'Snow CLI high-quality machine translation. Supports 100+ languages including Chinese, English, Japanese, Korean, French, German, Spanish, Italian, Russian, Arabic, and Portuguese. Use when the user needs to translate text, translate document fragments, or localize content. Usually more stable and more token-efficient than LLM self-translation.',
         inputSchema: {
           type: 'object',
           required: ['text', 'targetLang'],
           properties: {
-            text: { type: 'string', minLength: 1, maxLength: 10_000, description: '待翻译文本' },
+            text: { type: 'string', minLength: 1, maxLength: 10_000, description: 'Text to translate' },
             sourceLang: {
               type: 'string',
-              description: '源语言（ISO 639-1，如 zh, en, ja），留空自动检测',
+              description: 'Source language (ISO 639-1, e.g., zh, en, ja); auto-detected if left empty',
             },
             targetLang: {
               type: 'string',
-              description: '目标语言（ISO 639-1）',
+              description: 'Target language (ISO 639-1)',
               examples: ['en', 'zh', 'ja', 'ko', 'fr', 'de', 'es'],
             },
             domain: {
               type: 'string',
               enum: ['general', 'tech', 'medical', 'legal', 'finance', 'literature'],
               default: 'general',
-              description: '领域（可选，提升专业术语准确率）',
+              description: 'Domain (optional; improves terminology accuracy)',
             },
           } satisfies Record<string, any> as any,
         },
@@ -143,26 +143,26 @@ export const snowCliAdapter = defineCliAdapter({
         estimatedCredits: 1,
       },
 
-      // ======== 文生语音 ========
+      // ======== Text-to-speech ========
       {
         dshToolName: 'cli-hub:snow-cli:tts',
         description:
-          'Snow CLI 文本转语音。把文字合成自然语音并保存为音频文件。当用户需要朗读文章、制作配音、生成有声书时使用。',
+          'Snow CLI text-to-speech. Synthesizes natural speech from text and saves it as an audio file. Use when the user needs to read articles aloud, create voiceovers, or generate audiobooks.',
         inputSchema: {
           type: 'object',
           required: ['text'],
           properties: {
-            text: { type: 'string', minLength: 1, maxLength: 5000, description: '要合成的文本内容' },
+            text: { type: 'string', minLength: 1, maxLength: 5000, description: 'Text content to synthesize' },
             voice: {
               type: 'string',
               enum: ['male-zh', 'female-zh', 'male-en', 'female-en', 'male-ja', 'female-ja', 'child', 'news'],
               default: 'female-zh',
-              description: '音色',
+              description: 'Voice',
             },
-            speed: { type: 'number', minimum: 0.5, maximum: 2.0, default: 1.0, description: '语速倍数' },
+            speed: { type: 'number', minimum: 0.5, maximum: 2.0, default: 1.0, description: 'Speech speed multiplier' },
             outFile: {
               type: 'string',
-              description: '输出音频文件路径（.mp3/.wav/.m4a），留空自动生成',
+              description: 'Output audio file path (.mp3/.wav/.m4a); auto-generated if left empty',
             },
           } satisfies Record<string, any> as any,
         },
@@ -190,19 +190,19 @@ export const snowCliAdapter = defineCliAdapter({
         estimatedCredits: 3,
       },
 
-      // ======== 语音转写 ========
+      // ======== Speech transcription ========
       {
         dshToolName: 'cli-hub:snow-cli:asr',
         description:
-          'Snow CLI 语音转文字。把本地音频/视频文件转写为带时间戳的文本，支持识别语言自动检测。当用户上传录音、会议纪要、视频字幕时使用。',
+          'Snow CLI speech-to-text. Transcribes local audio/video files into timestamped text, with automatic language detection. Use when the user uploads recordings, meeting notes, or video subtitles.',
         inputSchema: {
           type: 'object',
           required: ['inFile'],
           properties: {
-            inFile: { type: 'string', description: '输入音频/视频文件绝对路径' },
-            lang: { type: 'string', description: '强制指定语言（留空自动检测）' },
-            withTimestamp: { type: 'boolean', default: true, description: '输出是否带时间戳' },
-            withSpeaker: { type: 'boolean', default: false, description: '是否开启说话人分离' },
+            inFile: { type: 'string', description: 'Absolute path to the input audio/video file' },
+            lang: { type: 'string', description: 'Force a specific language (auto-detected if left empty)' },
+            withTimestamp: { type: 'boolean', default: true, description: 'Whether the output includes timestamps' },
+            withSpeaker: { type: 'boolean', default: false, description: 'Whether to enable speaker diarization' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
@@ -223,7 +223,7 @@ export const snowCliAdapter = defineCliAdapter({
       },
     ],
 
-    // === Agent 模式：Snow CLI REPL（多模态 Agent，持久化会话）===
+    // === Agent mode: Snow CLI REPL (multimodal Agent, persistent session) ===
     agent: {
       protocol: 'line-based',
       spawn: {
@@ -233,7 +233,7 @@ export const snowCliAdapter = defineCliAdapter({
           '--workspace', '{{workspace}}',
           '--no-color',
         ],
-        // Snow CLI REPL 启动时会打印 `snow>` 或 `Snow>` 提示符
+        // Snow CLI REPL prints a `snow>` or `Snow>` prompt on startup
         readyPattern: 'snow>',
         readyTimeoutMs: 10_000,
         gracefulShutdownSignal: 'SIGTERM',
@@ -241,9 +241,9 @@ export const snowCliAdapter = defineCliAdapter({
       },
       agentMeta: {
         displayName: 'Snow AI',
-        description: 'Snowflake AI 多模态 Agent（画图/翻译/TTS/ASR + 聊天推理）。复用 Snow 账户订阅额度。',
+        description: 'Snowflake AI multimodal Agent (image generation/translation/TTS/ASR + chat reasoning). Reuses the Snow account subscription quota.',
         avatarEmoji: '❄️',
-        strengths: ['多模态生成', '机器翻译', '语音合成/识别', '画图'],
+        strengths: ['Multimodal generation', 'Machine translation', 'Speech synthesis/recognition', 'Image generation'],
         supportsStreaming: true,
       },
       shareDshTools: false,
@@ -257,7 +257,7 @@ export const snowCliAdapter = defineCliAdapter({
       parser: (stdout: string) => {
         let raw: any;
         try { raw = JSON.parse(stdout); } catch {
-          // Fallback：正则解析文本格式
+          // Fallback: parse the text format with regex
           const used = Number(stdout.match(/(?:used|消耗)[^\d]*(\d+(?:\.\d+)?)/i)?.[1] ?? NaN);
           const total = Number(stdout.match(/(?:total|总额|limit|上限)[^\d]*(\d+(?:\.\d+)?)/i)?.[1] ?? NaN);
           return {

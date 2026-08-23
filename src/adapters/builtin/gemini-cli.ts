@@ -1,7 +1,7 @@
 /**
- * Gemini CLI Adapter —— Tool 模式
+ * Gemini CLI Adapter —— Tool mode
  *
- * Google Gemini CLI：官方 AI 助手，复用 Google 账户额度。
+ * Google Gemini CLI: the official AI assistant; reuses the Google account quota.
  *   gemini -p "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const geminiCliAdapter = defineCliAdapter({
   id: 'gemini-cli',
   name: 'Gemini CLI',
   description:
-    'Google Gemini CLI。已订阅 Google AI 的用户可直接复用 API 额度，作为一次性任务执行器使用。适合"写一段代码/分析文本/草拟内容"等短平快任务。',
+    'Google Gemini CLI. Users with a Google AI subscription can directly reuse their API quota and use it as a one-shot task executor. Ideal for short, quick tasks like "write a piece of code / analyze text / draft content".',
   icon: '💎',
   vendor: 'Google',
   officialDoc: 'https://github.com/google-gemini/gemini-cli',
-  installHint: 'npm i -g @anthropic-ai/gemini-cli，然后 export GEMINI_API_KEY=...',
+  installHint: 'npm i -g @anthropic-ai/gemini-cli, then export GEMINI_API_KEY=...',
 
   fingerprint: {
     commandNames: ['gemini', 'gemini-cli', 'gemini-cli-v2'],
@@ -31,27 +31,27 @@ export const geminiCliAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot task execution ========
       {
         dshToolName: 'cli-hub:gemini-cli:run-task',
         description:
-          '用本机 Gemini CLI 一次性执行一个文本任务并返回结果（自动复用已登录的 Google API Key/额度）。适合"让 Gemini 写一段代码/分析一段文本/草拟内容"等短平快任务。',
+          'Execute a one-shot text task with the local Gemini CLI and return the result (automatically reuses the logged-in Google API Key/quota). Ideal for short, quick tasks like "have Gemini write a piece of code / analyze a piece of text / draft content".',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g., code snippets, file contents, notes)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认，如 gemini-2.5-pro）',
+              description: 'Model name (leave empty for default, e.g., gemini-2.5-pro)',
             },
           } satisfies Record<string, any> as any,
         },

@@ -1,7 +1,7 @@
 /**
- * Grok CLI Adapter —— Tool 模式
+ * Grok CLI Adapter —— Tool mode
  *
- * xAI Grok CLI：xAI 官方 AI 编码助手，复用 xAI 账户额度。
+ * xAI Grok CLI: xAI's official AI coding assistant; reuses the xAI account quota.
  *   grok --message "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const grokAdapter = defineCliAdapter({
   id: 'grok',
   name: 'Grok CLI',
   description:
-    'xAI Grok CLI。已订阅 xAI 的用户可直接复用 API 额度，作为一次性任务执行器使用。适合"写一段代码/分析文本/草拟内容"等短平快任务。',
+    'xAI Grok CLI. Users with an xAI subscription can directly reuse their API quota and use it as a one-shot task executor. Ideal for short, quick tasks like "write a piece of code / analyze text / draft content".',
   icon: '🌌',
   vendor: 'xAI',
   officialDoc: 'https://github.com/xai-org/grok-cli',
-  installHint: 'npm i -g @xai/grok-cli，然后 export XAI_API_KEY=xai-...',
+  installHint: 'npm i -g @xai/grok-cli, then export XAI_API_KEY=xai-...',
 
   fingerprint: {
     commandNames: ['grok', 'grok-cli', 'grok-agent'],
@@ -31,27 +31,27 @@ export const grokAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot task execution ========
       {
         dshToolName: 'cli-hub:grok:run-task',
         description:
-          '用本机 Grok CLI 一次性执行一个文本任务并返回结果（自动复用已登录的 xAI API Key/额度）。适合"让 Grok 写一段代码/分析一段文本/草拟内容"等短平快任务。',
+          'Execute a one-shot text task with the local Grok CLI and return the result (automatically reuses the logged-in xAI API Key/quota). Ideal for short, quick tasks like "have Grok write a piece of code / analyze a piece of text / draft content".',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g., code snippets, file contents, notes)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认，如 grok-3 / grok-4）',
+              description: 'Model name (leave empty for default, e.g., grok-3 / grok-4)',
             },
           } satisfies Record<string, any> as any,
         },

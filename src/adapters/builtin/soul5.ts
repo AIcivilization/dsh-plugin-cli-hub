@@ -1,10 +1,10 @@
 /**
- * Soul5 CLI Adapter —— Tool 模式
+ * Soul5 CLI Adapter — Tool mode
  *
- * Soul5 开源 AI Agent CLI，主打长任务编排与多 Agent 协作。
+ * Soul5 open-source AI Agent CLI focused on long-running task orchestration and multi-agent collaboration.
  *   soul5 run --json "<task>"
  *
- * 复用 Soul5 平台账户额度。
+ * Reuses the Soul5 platform account quota.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const soul5Adapter = defineCliAdapter({
   id: 'soul5',
   name: 'Soul5 CLI',
   description:
-    'Soul5 开源 AI Agent CLI。支持长任务编排、多 Agent 协作，适合复杂工作流自动化任务。',
+    'Soul5 open-source AI Agent CLI. Long-running task orchestration and multi-agent collaboration; suited for complex workflow automation.',
   icon: '🜂',
   vendor: 'Soul5',
   officialDoc: 'https://github.com/soul5/soul5-cli',
-  installHint: 'npm i -g soul5，然后 soul5 auth login',
+  installHint: 'npm i -g soul5, then soul5 auth login',
 
   fingerprint: {
     commandNames: ['soul5', 'soul5-cli'],
@@ -35,18 +35,18 @@ export const soul5Adapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:soul5:run-workflow',
-        description: '用 Soul5 CLI 执行一个多步工作流任务（支持多 Agent 协作）。',
+        description: 'Run a multi-step workflow task via the Soul5 CLI (multi-agent collaboration supported).',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             agents: {
               type: 'string',
-              description: '指定参与 Agent 列表（逗号分隔，如 "researcher,coder,reviewer"）',
+              description: 'List of participating agents (comma-separated, e.g. "researcher,coder,reviewer")',
             },
             maxSteps: { type: 'integer', minimum: 1, maximum: 50, default: 10 },
-            workdir: { type: 'string', description: '工作目录' },
+            workdir: { type: 'string', description: 'Working directory' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

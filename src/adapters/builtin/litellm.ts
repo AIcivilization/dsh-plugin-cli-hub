@@ -1,7 +1,7 @@
 /**
- * LiteLLM Adapter —— Tool 模式
+ * LiteLLM Adapter — Tool mode
  *
- * BerriAI/LiteLLM：多 provider 代理，统一 OpenAI 兼容协议调用 100+ 模型。
+ * BerriAI/LiteLLM: multi-provider proxy that calls 100+ models via a unified OpenAI-compatible protocol.
  *   litellm --model <model> --message "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const litellmAdapter = defineCliAdapter({
   id: 'litellm',
   name: 'LiteLLM',
   description:
-    'BerriAI/LiteLLM 多 provider 代理 CLI。统一 OpenAI 兼容协议调用 100+ provider 模型，可作为 Tool 模式的"通用 LLM 执行器"使用，便于在不同 provider 之间切换。',
+    'BerriAI/LiteLLM multi-provider proxy CLI. Calls 100+ provider models via a unified OpenAI-compatible protocol. Can be used as the "general LLM executor" in Tool mode, making it easy to switch between providers.',
   icon: '🔌',
   vendor: 'BerriAI',
   officialDoc: 'https://docs.litellm.ai',
-  installHint: 'pip install litellm，然后配置 provider 环境变量（如 OPENAI_API_KEY / ANTHROPIC_API_KEY）',
+  installHint: 'pip install litellm, then configure provider environment variables (e.g. OPENAI_API_KEY / ANTHROPIC_API_KEY)',
 
   fingerprint: {
     commandNames: ['litellm'],
@@ -29,7 +29,7 @@ export const litellmAdapter = defineCliAdapter({
       'LITELLM_API_KEY',
       'LITELLM_PROXY_URL',
     ],
-    // LiteLLM 无统一 auth status；通过列出已知 provider 间接判断
+    // LiteLLM has no unified auth status; infer indirectly by listing known providers
     authCheck: {
       cmd: 'litellm --model_list',
       expectAuthenticated: /([a-z][\w\/.-]+)/i,
@@ -39,28 +39,28 @@ export const litellmAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:litellm:run-task',
         description:
-          '用本机 LiteLLM 一次性执行一个文本任务并返回结果（自动复用已配置的 provider API Key/额度）。适合"问答/分析文本/草拟内容/翻译"等任务，特别适合需要在不同 provider/model 间切换的场景。',
+          'Run a one-shot text task on local LiteLLM and return the result (automatically reuses configured provider API keys/quota). Suited for tasks such as "Q&A / text analysis / content drafting / translation", especially scenarios that require switching between providers/models.',
         inputSchema: {
           type: 'object',
           required: ['task', 'model'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             model: {
               type: 'string',
               description:
-                'LiteLLM 模型名（如 gpt-4o / claude-3-7-sonnet / deepseek/deepseek-chat / gemini/gemini-2.0-flash，必填）',
+                'LiteLLM model name (e.g. gpt-4o / claude-3-7-sonnet / deepseek/deepseek-chat / gemini/gemini-2.0-flash; required)',
             },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             apiBase: {
               type: 'string',
-              description: '自定义 API base URL（如指向自建 LiteLLM proxy，留空使用 provider 默认）',
+              description: 'Custom API base URL (e.g. pointing to a self-hosted LiteLLM proxy; leave empty for the provider default)',
             },
           } satisfies Record<string, any> as any,
         },

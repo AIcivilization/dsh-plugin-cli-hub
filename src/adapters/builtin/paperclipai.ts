@@ -1,10 +1,10 @@
 /**
- * Paperclip AI CLI Adapter —— Tool 模式
+ * Paperclip AI CLI Adapter — Tool mode
  *
- * PaperclipAI 开源 Agent CLI，支持多种模型路由。
+ * PaperclipAI open-source Agent CLI with multi-model routing.
  *   paperclipai run --json "<task>"
  *
- * 复用 PaperclipAI 平台账户额度。
+ * Reuses the PaperclipAI platform account quota.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const paperclipaiAdapter = defineCliAdapter({
   id: 'paperclipai',
   name: 'PaperclipAI CLI',
   description:
-    'PaperclipAI 开源 Agent CLI。支持多模型路由与工具调用，可作 Tool 模式执行复杂任务。',
+    'PaperclipAI open-source Agent CLI. Multi-model routing and tool calling; runs complex tasks in Tool mode.',
   icon: '📎',
   vendor: 'PaperclipAI',
   officialDoc: 'https://github.com/paperclip-ai/paperclip-cli',
-  installHint: 'npm i -g paperclipai，然后 paperclipai auth login',
+  installHint: 'npm i -g paperclipai, then paperclipai auth login',
 
   fingerprint: {
     commandNames: ['paperclipai', 'paperclip', 'paperclip-cli'],
@@ -35,15 +35,15 @@ export const paperclipaiAdapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:paperclipai:run-task',
-        description: '用 PaperclipAI CLI 执行一个 Agent 任务（多模型路由 + 工具调用）。',
+        description: 'Run an Agent task via the PaperclipAI CLI (multi-model routing + tool calling).',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '任务描述' },
-            model: { type: 'string', description: '指定模型（留空用默认路由）' },
-            tools: { type: 'string', description: '允许工具列表（逗号分隔，如 "bash,fs,web"）' },
-            workdir: { type: 'string', description: '工作目录' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
+            model: { type: 'string', description: 'Specific model (leave empty for default routing)' },
+            tools: { type: 'string', description: 'Allowed tools list (comma-separated, e.g. "bash,fs,web")' },
+            workdir: { type: 'string', description: 'Working directory' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

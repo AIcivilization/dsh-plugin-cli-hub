@@ -1,7 +1,7 @@
 /**
- * Windsurf Adapter —— Tool 模式
+ * Windsurf Adapter — Tool mode
  *
- * Windsurf/Devin Desktop CLI：Codeium 出品的 AI 编码 Agent。
+ * Windsurf/Devin Desktop CLI: AI coding Agent by Codeium.
  *   windsurf run --task "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const windsurfAdapter = defineCliAdapter({
   id: 'windsurf',
   name: 'Windsurf',
   description:
-    'Windsurf/Devin Desktop CLI（Codeium 出品）。AI 编码 Agent，复用 Codeium 订阅额度，可作为 Tool 模式的"任务执行器"使用。',
+    'Windsurf/Devin Desktop CLI (by Codeium). AI coding Agent that reuses the Codeium subscription quota; can be used as the "task executor" in Tool mode.',
   icon: '🏄',
   vendor: 'Codeium',
   officialDoc: 'https://docs.windsurf.com',
-  installHint: 'curl -fsSL https://windsurf.com/install.sh | bash 或在 Windsurf IDE 内安装',
+  installHint: 'curl -fsSL https://windsurf.com/install.sh | bash, or install within the Windsurf IDE',
 
   fingerprint: {
     commandNames: ['windsurf', 'windsurf-cli', 'devin-desktop'],
@@ -31,27 +31,27 @@ export const windsurfAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:windsurf:run-task',
         description:
-          '用本机 Windsurf 一次性执行一个文本任务并返回结果（自动复用 Codeium 订阅额度）。适合"修改代码/分析文本/草拟内容"等任务。',
+          'Run a one-shot text task on local Windsurf and return the result (automatically reuses the Codeium subscription quota). Suited for tasks such as "code modification / text analysis / content drafting".',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认，如 windsurf-default / gpt-4o / claude-3.7-sonnet）',
+              description: 'Model name (leave empty for default, e.g. windsurf-default / gpt-4o / claude-3.7-sonnet)',
             },
           } satisfies Record<string, any> as any,
         },

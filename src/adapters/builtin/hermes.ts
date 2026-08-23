@@ -1,11 +1,11 @@
 /**
- * Hermes CLI Adapter —— Tool 模式 + Agent 模式预留
+ * Hermes CLI Adapter —— Tool mode + Agent mode reserved
  *
- * NousResearch Hermes 系列开源 CLI（含 hermes-acp ACP 协议变体）。
+ * NousResearch Hermes family of open-source CLIs (including the hermes-acp ACP protocol variant).
  *   hermes chat --json "<prompt>"
- *   hermes-acp serve --stdio   ← Agent 模式 V2 再接入
+ *   hermes-acp serve --stdio   ← Agent mode to be integrated in V2
  *
- * 复用本地部署的 Hermes 模型或第三方网关额度。
+ * Reuses locally deployed Hermes models or third-party gateway quota.
  */
 import { defineCliAdapter } from '../define';
 
@@ -13,11 +13,11 @@ export const hermesAdapter = defineCliAdapter({
   id: 'hermes',
   name: 'Hermes CLI',
   description:
-    'NousResearch Hermes 系列 CLI（hermes / hermes-acp）。开源模型 + ACP 协议支持，可作 Tool 模式调用或子 Agent。',
+    'NousResearch Hermes family CLIs (hermes / hermes-acp). Open-source models + ACP protocol support; usable as a Tool mode call or a sub-Agent.',
   icon: '🪽',
   vendor: 'NousResearch',
   officialDoc: 'https://github.com/NousResearch/hermes-cli',
-  installHint: 'pip install hermes-cli 或 npm i -g @nous/hermes-cli，然后 export HERMES_API_KEY=...',
+  installHint: 'pip install hermes-cli or npm i -g @nous/hermes-cli, then export HERMES_API_KEY=...',
 
   fingerprint: {
     commandNames: ['hermes', 'hermes-acp', 'hermes-cli'],
@@ -37,14 +37,14 @@ export const hermesAdapter = defineCliAdapter({
       {
         dshToolName: 'cli-hub:hermes:chat',
         description:
-          '用 Hermes CLI 做一轮 chat。适合需要 Nous Hermes 模型推理能力的任务（推理/Function Call）。复用本地或第三方网关额度。',
+          'Run one round of chat with the Hermes CLI. Suited for tasks that need Nous Hermes model reasoning (reasoning/function calling). Reuses local or third-party gateway quota.',
         inputSchema: {
           type: 'object',
           required: ['prompt'],
           properties: {
-            prompt: { type: 'string', minLength: 1, maxLength: 16000, description: '用户输入' },
-            system: { type: 'string', description: 'System prompt（可选）' },
-            model: { type: 'string', description: '模型名（如 Hermes-3-Llama-4-70B，留空用默认）' },
+            prompt: { type: 'string', minLength: 1, maxLength: 16000, description: 'User input' },
+            system: { type: 'string', description: 'System prompt (optional)' },
+            model: { type: 'string', description: 'Model name (e.g. Hermes-3-Llama-4-70B; leave empty for default)' },
             temperature: { type: 'number', minimum: 0, maximum: 2, default: 0.7 },
           } satisfies Record<string, any> as any,
         },

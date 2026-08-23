@@ -1,11 +1,11 @@
 /**
- * GitHub Copilot CLI Adapter —— Tool 模式
+ * GitHub Copilot CLI Adapter —— Tool mode
  *
- * GitHub 官方 CLI 子命令 `gh copilot`（通过 gh 扩展安装）以及独立的 `copilot` 二进制。
+ * GitHub's official CLI subcommand `gh copilot` (installed via a gh extension) and the standalone `copilot` binary.
  *   copilot suggest "..." --json
  *   copilot explain "..."
  *
- * 复用 GitHub 账户的 Copilot 订阅额度。
+ * Reuses the Copilot subscription quota of the GitHub account.
  */
 import { defineCliAdapter } from '../define';
 
@@ -13,11 +13,11 @@ export const copilotAdapter = defineCliAdapter({
   id: 'copilot',
   name: 'GitHub Copilot CLI',
   description:
-    'GitHub Copilot 官方 CLI（gh copilot / copilot）。已订阅 Copilot 的用户可直接复用账户额度，作为代码补全与建议 Tool 使用。',
+    'The official GitHub Copilot CLI (gh copilot / copilot). Users with a Copilot subscription can directly reuse their account quota and use it as a code completion and suggestion tool.',
   icon: '🐙',
   vendor: 'GitHub',
   officialDoc: 'https://docs.github.com/copilot/cli',
-  installHint: 'gh extension install github/gh-copilot 或 npm i -g @github/copilot-cli，然后 gh auth login',
+  installHint: 'gh extension install github/gh-copilot or npm i -g @github/copilot-cli, then gh auth login',
 
   fingerprint: {
     commandNames: ['copilot', 'gh-copilot'],
@@ -34,18 +34,18 @@ export const copilotAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 代码建议 ========
+      // ======== Code suggestion ========
       {
         dshToolName: 'cli-hub:copilot:suggest',
         description:
-          '用 Copilot CLI 给出代码建议（"我想用 bash 批量重命名 jpg 文件"→ 给出命令）。复用 GitHub Copilot 订阅额度。',
+          'Get code suggestions from Copilot CLI ("I want to batch rename jpg files with bash" → returns a command). Reuses the GitHub Copilot subscription quota.',
         inputSchema: {
           type: 'object',
           required: ['prompt'],
           properties: {
-            prompt: { type: 'string', minLength: 2, maxLength: 2000, description: '描述想要的代码或命令' },
-            language: { type: 'string', description: '目标语言/Shell（sh/js/ts/go/py/rs...）' },
-            workdir: { type: 'string', description: '工作目录（默认当前 DSH workspace）' },
+            prompt: { type: 'string', minLength: 2, maxLength: 2000, description: 'Describe the code or command you want' },
+            language: { type: 'string', description: 'Target language/Shell (sh/js/ts/go/py/rs...)' },
+            workdir: { type: 'string', description: 'Working directory (defaults to the current DSH workspace)' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
@@ -64,15 +64,15 @@ export const copilotAdapter = defineCliAdapter({
         estimatedCredits: 2,
       },
 
-      // ======== 命令/代码解释 ========
+      // ======== Command/code explanation ========
       {
         dshToolName: 'cli-hub:copilot:explain',
-        description: '用 Copilot CLI 解释一段命令或代码片段的作用。',
+        description: 'Use Copilot CLI to explain what a command or code snippet does.',
         inputSchema: {
           type: 'object',
           required: ['snippet'],
           properties: {
-            snippet: { type: 'string', minLength: 1, maxLength: 4000, description: '要解释的命令/代码' },
+            snippet: { type: 'string', minLength: 1, maxLength: 4000, description: 'The command/code to explain' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

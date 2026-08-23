@@ -1,10 +1,10 @@
 /**
- * smol AI CLI Adapter —— Tool 模式
+ * smol AI CLI Adapter — Tool mode
  *
- * smol-ai/smol-developer 系列 CLI：早期开源 AI 软件工程师，主打"PM → 代码"流程。
+ * smol-ai/smol-developer family CLI: an early open-source AI software engineer, centered on the "PM → code" flow.
  *   smol --prompt "<task>" --json
  *
- * 复用 OpenAI API Key。
+ * Reuses the OpenAI API key.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const smolAdapter = defineCliAdapter({
   id: 'smol',
   name: 'smol Developer CLI',
   description:
-    'smol-ai/smol-developer 早期开源 AI 软件工程师 CLI。主打"PM → 代码"流程，可作 Tool 模式使用。',
+    'smol-ai/smol-developer, an early open-source AI software engineer CLI. Centered on the "PM → code" flow; usable in Tool mode.',
   icon: '🤏',
   vendor: 'smol-ai',
   officialDoc: 'https://github.com/smol-ai/smol-developer',
-  installHint: 'npm i -g @smol/cli 或 pip install smol-developer，然后 export OPENAI_API_KEY=...',
+  installHint: 'npm i -g @smol/cli or pip install smol-developer, then export OPENAI_API_KEY=...',
 
   fingerprint: {
     commandNames: ['smol', 'smol-developer', 'smol-cli'],
@@ -35,14 +35,14 @@ export const smolAdapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:smol:develop',
-        description: '用 smol CLI 执行一个"PM → 代码"任务（输入需求描述，输出代码）。',
+        description: 'Run a "PM → code" task via the smol CLI (takes a requirement description, outputs code).',
         inputSchema: {
           type: 'object',
           required: ['prompt'],
           properties: {
-            prompt: { type: 'string', minLength: 2, maxLength: 8000, description: '需求描述（PM-style）' },
-            model: { type: 'string', description: 'OpenAI 模型（如 gpt-4o）' },
-            workdir: { type: 'string', description: '工作目录' },
+            prompt: { type: 'string', minLength: 2, maxLength: 8000, description: 'Requirement description (PM-style)' },
+            model: { type: 'string', description: 'OpenAI model (e.g. gpt-4o)' },
+            workdir: { type: 'string', description: 'Working directory' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

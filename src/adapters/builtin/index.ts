@@ -1,12 +1,12 @@
 /**
- * 内置 adapter 注册中心
+ * Built-in adapter registry
  *
- * 列表共 33 个 adapter：
- *   - 原 4 个：snow-cli / officecli / kimi-cli / claude-code
- *   - 第二批 17 个：codex / gemini-cli / aider / cline / continue / opencode / goose
+ * 33 adapters in total:
+ *   - Original 4: snow-cli / officecli / kimi-cli / claude-code
+ *   - Second batch of 17: codex / gemini-cli / aider / cline / continue / opencode / goose
  *                  / cursor-cli / junie / windsurf / aichat / tgpt / ollama / litellm
  *                  / grok / qwen / trae
- *   - 第三批 12 个（覆盖本机发现 + 开源生态）：
+ *   - Third batch of 12 (locally discovered CLIs + the open-source ecosystem):
  *                  copilot / hermes / paperclipai / freebuff / soul5 / devin-desktop
  *                  / catpawai / llm / gptme / chatblade / smol / openclaudia
  */
@@ -46,12 +46,12 @@ import { smolAdapter } from './smol';
 import { openclaudiaAdapter } from './openclaudia';
 
 export const BUILTIN_ADAPTERS = [
-  // === 原 4 个 ===
+  // === Original 4 ===
   snowCliAdapter,
   officeCliAdapter,
   kimiCliAdapter,
   claudeCodeAdapter,
-  // === 第二批 17 个 ===
+  // === Second batch of 17 ===
   codexAdapter,
   geminiCliAdapter,
   aiderAdapter,
@@ -69,7 +69,7 @@ export const BUILTIN_ADAPTERS = [
   grokAdapter,
   qwenAdapter,
   traeAdapter,
-  // === 第三批 12 个（本机发现 + 开源生态） ===
+  // === Third batch of 12 (locally discovered + open-source ecosystem) ===
   copilotAdapter,
   hermesAdapter,
   paperclipaiAdapter,

@@ -1,10 +1,10 @@
 /**
- * OpenClaudia CLI Adapter —— Tool 模式
+ * OpenClaudia CLI Adapter —— Tool mode
  *
- * OpenClaudia 开源 Claude Code 替代 CLI，主打可定制性 + 多 provider 路由。
+ * OpenClaudia is an open-source Claude Code alternative CLI focused on customizability + multi-provider routing.
  *   openclaudia run --json "<task>"
  *
- * 复用 Anthropic / OpenAI / DeepSeek 等多种 provider 额度。
+ * Reuses quota from multiple providers such as Anthropic / OpenAI / DeepSeek.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const openclaudiaAdapter = defineCliAdapter({
   id: 'openclaudia',
   name: 'OpenClaudia CLI',
   description:
-    'OpenClaudia 开源 Claude Code 替代 CLI。支持多 provider 路由（Anthropic/OpenAI/DeepSeek），可作 Tool 模式使用。',
+    'OpenClaudia is an open-source Claude Code alternative CLI. Supports multi-provider routing (Anthropic/OpenAI/DeepSeek); usable in Tool mode.',
   icon: '🔓',
   vendor: 'OpenClaudia',
   officialDoc: 'https://github.com/openclaudia/openclaudia-cli',
-  installHint: 'npm i -g @openclaudia/cli 或 pip install openclaudia，然后 openclaudia auth login',
+  installHint: 'npm i -g @openclaudia/cli or pip install openclaudia, then run openclaudia auth login',
 
   fingerprint: {
     commandNames: ['openclaudia', 'openclaudia-cli'],
@@ -35,14 +35,14 @@ export const openclaudiaAdapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:openclaudia:run-task',
-        description: '用 OpenClaudia CLI 执行一个编码任务（多 provider 路由）。',
+        description: 'Run a coding task via the OpenClaudia CLI (multi-provider routing).',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '任务描述' },
-            provider: { type: 'string', description: 'provider（anthropic/openai/deepseek，留空用默认）' },
-            workdir: { type: 'string', description: '工作目录' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
+            provider: { type: 'string', description: 'Provider (anthropic/openai/deepseek; leave empty for default)' },
+            workdir: { type: 'string', description: 'Working directory for the task' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

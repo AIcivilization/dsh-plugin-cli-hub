@@ -1,10 +1,10 @@
 /**
- * FreeBuff CLI Adapter —— Tool 模式
+ * FreeBuff CLI Adapter — Tool mode
  *
- * FreeBuff 开源安全/渗透测试 AI Agent CLI。
+ * FreeBuff open-source security/pentest AI Agent CLI.
  *   freebuff run --json "<task>"
  *
- * 复用 FreeBuff 平台账户额度。
+ * Reuses the FreeBuff platform account quota.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const freebuffAdapter = defineCliAdapter({
   id: 'freebuff',
   name: 'FreeBuff CLI',
   description:
-    'FreeBuff 开源安全/渗透测试 AI Agent CLI。可作 Tool 模式执行安全分析、漏洞扫描、代码审计任务。',
+    'FreeBuff open-source security/pentest AI Agent CLI. Runs security analysis, vulnerability scanning and code audit tasks in Tool mode.',
   icon: '🛡️',
   vendor: 'FreeBuff',
   officialDoc: 'https://github.com/freebuff/freebuff-cli',
-  installHint: 'npm i -g freebuff，然后 freebuff auth login',
+  installHint: 'npm i -g freebuff, then freebuff auth login',
 
   fingerprint: {
     commandNames: ['freebuff', 'freebuff-cli'],
@@ -35,19 +35,19 @@ export const freebuffAdapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:freebuff:scan',
-        description: '用 FreeBuff CLI 执行安全扫描/漏洞分析任务。',
+        description: 'Run security scanning / vulnerability analysis tasks via the FreeBuff CLI.',
         inputSchema: {
           type: 'object',
           required: ['target'],
           properties: {
-            target: { type: 'string', minLength: 1, maxLength: 2000, description: '扫描目标（URL/IP/文件路径）' },
+            target: { type: 'string', minLength: 1, maxLength: 2000, description: 'Scan target (URL / IP / file path)' },
             mode: {
               type: 'string',
               enum: ['quick', 'deep', 'audit'],
               default: 'quick',
-              description: '扫描模式：quick 快速 / deep 深度 / audit 代码审计',
+              description: 'Scan mode: quick (fast) / deep (thorough) / audit (code audit)',
             },
-            workdir: { type: 'string', description: '工作目录' },
+            workdir: { type: 'string', description: 'Working directory' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

@@ -1,7 +1,7 @@
 /**
- * OfficeCLI Adapter（Tool 模式）—— AionUI 同款 OfficeCLI
+ * OfficeCLI Adapter (Tool mode) — the same OfficeCLI as AionUI
  *
- * 命令映射（按 OfficeCLI 公开协议写，如实际不符可 patch 覆盖）：
+ * Command mapping (written against the public OfficeCLI protocol; patch to override if actual behavior differs):
  *   officecli ppt --topic <topic> --slides <n> --out <pptx>
  *   officecli docx --title <t> --content <file> --out <docx>
  *   officecli xlsx --data <json|csv> --sheet <name> --out <xlsx>
@@ -13,11 +13,11 @@ export const officeCliAdapter = defineCliAdapter({
   id: 'officecli',
   name: 'OfficeCLI',
   description:
-    'iOfficeAI/OfficeCLI：把 PPT (Morph 动画)、Word (.docx)、Excel (.xlsx/.xlsm) 从需求直接生成可编辑成品。复用 AionUI OfficeCLI 订阅额度。',
+    'iOfficeAI/OfficeCLI: turns requirements directly into editable finished PPT (Morph animations), Word (.docx), and Excel (.xlsx/.xlsm) deliverables. Reuses the AionUI OfficeCLI subscription quota.',
   icon: '📄',
   vendor: 'iOfficeAI',
   officialDoc: 'https://github.com/iOfficeAI/OfficeCli',
-  installHint: 'brew install iofficeai/tap/officecli 或 npm i -g @iofficeai/office-cli，然后 officecli auth login',
+  installHint: 'brew install iofficeai/tap/officecli or npm i -g @iofficeai/office-cli, then officecli auth login',
 
   fingerprint: {
     commandNames: ['officecli', 'office-cli'],
@@ -38,29 +38,29 @@ export const officeCliAdapter = defineCliAdapter({
       {
         dshToolName: 'cli-hub:officecli:gen-ppt',
         description:
-          '用 OfficeCLI 生成带 Morph 平滑动画的 PPT。适合汇报、培训、产品介绍、学术答辩等场景。当用户说"做一份 PPT""写一套幻灯片"时使用。',
+          'Generate a PPT with Morph smooth animations using OfficeCLI. Suited for reporting, training, product introductions, academic defenses, and similar scenarios. Use when the user says "make a PPT" or "write a set of slides".',
         inputSchema: {
           type: 'object',
           required: ['topic', 'outline'],
           properties: {
-            topic: { type: 'string', minLength: 2, maxLength: 200, description: 'PPT 主题/标题' },
+            topic: { type: 'string', minLength: 2, maxLength: 200, description: 'PPT topic/title' },
             audience: {
               type: 'string',
-              description: '观众画像（如"投资人"/"产品经理新手"/"大二学生"），用于调节术语密度',
+              description: 'Audience profile (e.g. "investors" / "novice product managers" / "college sophomores"), used to adjust terminology density',
             },
             style: {
               type: 'string',
               enum: ['business', 'startup', 'academic', 'creative', 'minimal', 'tech_dark'],
               default: 'business',
-              description: '视觉风格',
+              description: 'Visual style',
             },
-            slideCount: { type: 'integer', minimum: 3, maximum: 40, default: 10, description: '建议页数' },
+            slideCount: { type: 'integer', minimum: 3, maximum: 40, default: 10, description: 'Suggested slide count' },
             outline: {
               type: 'array',
               items: { type: 'string' },
-              description: '每页幻灯片的核心要点（长度应 ≈ slideCount），留空可自动生成',
+              description: 'Core points for each slide (length should be ≈ slideCount); auto-generated when left empty',
             },
-            outFile: { type: 'string', description: '输出 .pptx 路径，留空自动生成' },
+            outFile: { type: 'string', description: 'Output .pptx path; auto-generated when left empty' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
@@ -98,12 +98,12 @@ export const officeCliAdapter = defineCliAdapter({
       {
         dshToolName: 'cli-hub:officecli:gen-word',
         description:
-          '用 OfficeCLI 生成结构化 Word (.docx) 文档。适合论文/报告/方案/合同草稿等场景。',
+          'Generate a structured Word (.docx) document using OfficeCLI. Suited for papers/reports/proposals/contract drafts and similar scenarios.',
         inputSchema: {
           type: 'object',
           required: ['title', 'sections'],
           properties: {
-            title: { type: 'string', description: '文档标题' },
+            title: { type: 'string', description: 'Document title' },
             template: {
               type: 'string',
               enum: ['general', 'academic_paper', 'business_report', 'contract', 'resume', 'meeting_minutes'],
@@ -120,7 +120,7 @@ export const officeCliAdapter = defineCliAdapter({
                 } satisfies Record<string, any> as any,
               },
             },
-            outFile: { type: 'string', description: '输出 .docx 路径，留空自动生成' },
+            outFile: { type: 'string', description: 'Output .docx path; auto-generated when left empty' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {
@@ -150,7 +150,7 @@ export const officeCliAdapter = defineCliAdapter({
       {
         dshToolName: 'cli-hub:officecli:gen-excel',
         description:
-          '用 OfficeCLI 生成带格式/图表/公式的 Excel (.xlsx)。适合数据分析输出、报表自动化等。',
+          'Generate an Excel (.xlsx) with formatting/charts/formulas using OfficeCLI. Suited for data analysis output, report automation, and similar scenarios.',
         inputSchema: {
           type: 'object',
           required: ['sheets'],
@@ -162,7 +162,7 @@ export const officeCliAdapter = defineCliAdapter({
                 required: ['name', 'data'],
                 properties: {
                   name: { type: 'string', maxLength: 31 },
-                  data: { description: '二维数组或对象数组。对象数组会自动取 keys 作为表头。' },
+                  data: { description: '2D array or array of objects. For arrays of objects, keys are automatically used as the header row.' },
                   headerStyle: { type: 'string', enum: ['default', 'bold_fill', 'bold_border'] },
                   charts: {
                     type: 'array',
@@ -179,7 +179,7 @@ export const officeCliAdapter = defineCliAdapter({
                 } satisfies Record<string, any> as any,
               },
             },
-            outFile: { type: 'string', description: '输出 .xlsx 路径，留空自动生成' },
+            outFile: { type: 'string', description: 'Output .xlsx path; auto-generated when left empty' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

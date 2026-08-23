@@ -1,13 +1,13 @@
 /**
- * defineCliAdapter —— 供内置和第三方 adapter 作者使用的类型友好工厂。
+ * defineCliAdapter — a type-friendly factory for built-in and third-party adapter authors.
  *
- * 主要作用：
- *   · 提供 TypeScript 类型推断（不用手写泛型）
- *   · 在定义期做轻量级 runtime 校验（和 Registry._assertValidAdapter 互补）
+ * Main purposes:
+ *   · Provide TypeScript type inference (no need to write generics manually)
+ *   · Perform lightweight runtime validation at definition time (complements Registry._assertValidAdapter)
  *
- * 使用示例：
+ * Usage example:
  *   export const snowCliAdapter = defineCliAdapter({
- *     id: 'snow-cli', name: 'Snow CLI', description: '画图翻译语音',
+ *     id: 'snow-cli', name: 'Snow CLI', description: 'Drawing, translation, voice',
  *     fingerprint: { commandNames: ['snow'], ... },
  *     capabilities: { tools: [ ... ] },
  *   });
@@ -15,15 +15,15 @@
 import type { CliAdapterDefinition } from '../core/types';
 
 export function defineCliAdapter<T extends CliAdapterDefinition>(def: T): T {
-  // 运行期轻校验（失败直接抛，防止 adapter 定义就挂）
+  // Lightweight runtime validation (throw on failure to prevent adapter definition from being broken)
   if (!def.id || !/^[a-z0-9-]{2,64}$/.test(def.id))
-    throw new TypeError(`[defineCliAdapter] id 非法: ${def.id}`);
+    throw new TypeError(`[defineCliAdapter] invalid id: ${def.id}`);
   if (!def.name || !def.description)
-    throw new TypeError(`[defineCliAdapter] ${def.id}: name/description 必填`);
+    throw new TypeError(`[defineCliAdapter] ${def.id}: name/description are required`);
   if (!def.fingerprint?.commandNames?.length)
-    throw new TypeError(`[defineCliAdapter] ${def.id}: fingerprint.commandNames 空`);
+    throw new TypeError(`[defineCliAdapter] ${def.id}: fingerprint.commandNames is empty`);
   const caps = def.capabilities;
   if (!caps.tools?.length && !caps.agent)
-    throw new TypeError(`[defineCliAdapter] ${def.id}: capabilities 需要 tool 或 agent`);
+    throw new TypeError(`[defineCliAdapter] ${def.id}: capabilities requires tool or agent`);
   return def;
 }

@@ -1,7 +1,7 @@
 /**
- * Qwen CLI Adapter —— Tool 模式
+ * Qwen CLI Adapter —— Tool mode
  *
- * Alibaba Qwen CLI：阿里通义千问官方 CLI，复用 DashScope 账户额度。
+ * Alibaba Qwen CLI: Alibaba Tongyi Qianwen's official CLI; reuses the DashScope account quota.
  *   qwen --message "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const qwenAdapter = defineCliAdapter({
   id: 'qwen',
   name: 'Qwen CLI',
   description:
-    'Alibaba Qwen CLI。已订阅 DashScope/通义千问的用户可直接复用 API 额度，作为一次性任务执行器使用。中文场景表现强，适合"写一段代码/分析文本/草拟内容"等短平快任务。',
+    'Alibaba Qwen CLI. Users with a DashScope/Tongyi Qianwen subscription can directly reuse their API quota and use it as a one-shot task executor. Strong performance in Chinese-language scenarios; ideal for short, quick tasks like "write a piece of code / analyze text / draft content".',
   icon: '🌟',
   vendor: 'Alibaba',
   officialDoc: 'https://github.com/QwenLM/qwen-cli',
-  installHint: 'npm i -g @qwen/qwen-cli，然后 export DASHSCOPE_API_KEY=sk-...',
+  installHint: 'npm i -g @qwen/qwen-cli, then export DASHSCOPE_API_KEY=sk-...',
 
   fingerprint: {
     commandNames: ['qwen', 'qwen-cli'],
@@ -31,27 +31,27 @@ export const qwenAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot task execution ========
       {
         dshToolName: 'cli-hub:qwen:run-task',
         description:
-          '用本机 Qwen CLI 一次性执行一个文本任务并返回结果（自动复用已登录的 DashScope API Key/额度）。适合"让 Qwen 写一段代码/分析一段文本/草拟内容"等短平快任务，中文场景表现强。',
+          'Execute a one-shot text task with the local Qwen CLI and return the result (automatically reuses the logged-in DashScope API Key/quota). Ideal for short, quick tasks like "have Qwen write a piece of code / analyze a piece of text / draft content"; strong performance in Chinese-language scenarios.',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g., code snippets, file contents, notes)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认，如 qwen-max / qwen3-coder-plus / qwen2.5-72b-instruct）',
+              description: 'Model name (leave empty for default, e.g., qwen-max / qwen3-coder-plus / qwen2.5-72b-instruct)',
             },
           } satisfies Record<string, any> as any,
         },

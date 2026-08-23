@@ -1,7 +1,7 @@
 /**
- * AIChat Adapter —— Tool 模式
+ * AIChat Adapter —— Tool mode
  *
- * sigoden/aichat：多模型聊天 CLI，支持 20+ LLM provider 与角色/MCP。
+ * sigoden/aichat: multi-model chat CLI supporting 20+ LLM providers plus roles/MCP.
  *   aichat -m "<model>" --message "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const aichatAdapter = defineCliAdapter({
   id: 'aichat',
   name: 'AIChat',
   description:
-    'sigoden/aichat 多模型聊天 CLI。原生支持 20+ LLM provider（OpenAI/Anthropic/Google/DeepSeek/本地 Ollama 等），可作为 Tool 模式的"通用问答/文本执行器"使用。',
+    'sigoden/aichat multi-model chat CLI. Natively supports 20+ LLM providers (OpenAI/Anthropic/Google/DeepSeek/local Ollama, etc.) and can serve as a general-purpose Q&A/text executor in Tool mode.',
   icon: '💬',
   vendor: 'sigoden',
   officialDoc: 'https://github.com/sigoden/aichat',
-  installHint: 'cargo install aichat 或下载预编译二进制；首次运行会引导配置 provider',
+  installHint: 'cargo install aichat or download a prebuilt binary; the first run guides you through provider config',
 
   fingerprint: {
     commandNames: ['aichat'],
@@ -29,7 +29,7 @@ export const aichatAdapter = defineCliAdapter({
       'OLLAMA_HOST',
     ],
     authCheck: {
-      // aichat 没有原生 auth status；通过列出已配置 provider 来间接判断
+      // aichat has no native auth status; auth is inferred indirectly by listing configured providers
       cmd: 'aichat --list-models',
       expectAuthenticated: /([a-z][\w-]+)/i,
       expectUnauthenticated: /(no.*model|no.*provider|please.*config|not configured)/i,
@@ -38,27 +38,27 @@ export const aichatAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== one-shot task execution ========
       {
         dshToolName: 'cli-hub:aichat:run-task',
         description:
-          '用本机 aichat 一次性执行一个文本任务并返回结果（自动复用已配置的 LLM API Key/额度）。适合"问答/分析文本/草拟内容/翻译"等任务。',
+          'Run a one-shot text task with the local aichat and return the result (automatically reuses the configured LLM API key/quota). Suited for tasks like Q&A, text analysis, content drafting, and translation.',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Description of the task to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g., code snippets, file contents, notes)',
             },
             model: {
               type: 'string',
-              description: '模型名（如 gpt-4o / claude-3.7-sonnet / deepseek-chat / qwen-max）',
+              description: 'Model name (e.g., gpt-4o / claude-3.7-sonnet / deepseek-chat / qwen-max)',
             },
             role: {
               type: 'string',
-              description: 'aichat 角色（role）名，留空使用默认空角色',
+              description: 'aichat role name; leave empty to use the default empty role',
             },
           } satisfies Record<string, any> as any,
         },

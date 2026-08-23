@@ -1,10 +1,10 @@
 /**
- * CatpawAI CLI Adapter —— Tool 模式
+ * CatpawAI CLI Adapter —— Tool mode
  *
- * CatpawAI 开源 AI Agent CLI（基于 ACP 协议）。
+ * CatpawAI open-source AI agent CLI (based on the ACP protocol).
  *   catpawai run --json "<task>"
  *
- * 复用 CatpawAI 平台账户额度或本地模型。
+ * Reuses CatpawAI platform account quota or local models.
  */
 import { defineCliAdapter } from '../define';
 
@@ -12,11 +12,11 @@ export const catpawaiAdapter = defineCliAdapter({
   id: 'catpawai',
   name: 'CatpawAI CLI',
   description:
-    'CatpawAI 开源 AI Agent CLI（基于 ACP 协议）。支持工具调用与多步推理，可作 Tool 模式使用。',
+    'CatpawAI open-source AI agent CLI (based on the ACP protocol). Supports tool calls and multi-step reasoning; usable in Tool mode.',
   icon: '🐾',
   vendor: 'CatpawAI',
   officialDoc: 'https://github.com/catpawai/catpawai-cli',
-  installHint: 'npm i -g catpawai 或 pip install catpawai，然后 catpawai auth login',
+  installHint: 'npm i -g catpawai or pip install catpawai, then catpawai auth login',
 
   fingerprint: {
     commandNames: ['catpawai', 'catpaw', 'catpawai-cli'],
@@ -35,15 +35,15 @@ export const catpawaiAdapter = defineCliAdapter({
     tools: [
       {
         dshToolName: 'cli-hub:catpawai:run-task',
-        description: '用 CatpawAI CLI 执行一个 Agent 任务（工具调用 + 多步推理）。',
+        description: 'Run an agent task with CatpawAI CLI (tool calls + multi-step reasoning).',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '任务描述' },
-            tools: { type: 'string', description: '允许工具列表（逗号分隔）' },
-            model: { type: 'string', description: '指定模型（留空用默认）' },
-            workdir: { type: 'string', description: '工作目录' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description' },
+            tools: { type: 'string', description: 'Allowed tools list (comma-separated)' },
+            model: { type: 'string', description: 'Model to use (leave empty for default)' },
+            workdir: { type: 'string', description: 'Working directory' },
           } satisfies Record<string, any> as any,
         },
         commandMapping: {

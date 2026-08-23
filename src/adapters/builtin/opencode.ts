@@ -1,7 +1,7 @@
 /**
- * OpenCode Adapter —— Tool 模式
+ * OpenCode Adapter — Tool mode
  *
- * OpenCode：支持 75+ provider 的终端 AI Agent。
+ * OpenCode: terminal AI Agent supporting 75+ providers.
  *   opencode run --task "<task>"
  */
 import { defineCliAdapter } from '../define';
@@ -10,11 +10,11 @@ export const opencodeAdapter = defineCliAdapter({
   id: 'opencode',
   name: 'OpenCode',
   description:
-    'OpenCode 终端 AI Agent。原生支持 75+ provider（Anthropic/OpenAI/DeepSeek/Google/xAI 等），可作为 Tool 模式的"任务执行器"使用。',
+    'OpenCode terminal AI Agent. Natively supports 75+ providers (Anthropic/OpenAI/DeepSeek/Google/xAI, etc.). Can be used as the "task executor" in Tool mode.',
   icon: '✨',
   vendor: 'OpenCode',
   officialDoc: 'https://github.com/sst/opencode',
-  installHint: 'npm i -g opencode，然后 export ANTHROPIC_API_KEY 或 OPENAI_API_KEY',
+  installHint: 'npm i -g opencode, then export ANTHROPIC_API_KEY or OPENAI_API_KEY',
 
   fingerprint: {
     commandNames: ['opencode', 'opencode-cli', 'opencode-agent'],
@@ -31,31 +31,31 @@ export const opencodeAdapter = defineCliAdapter({
 
   capabilities: {
     tools: [
-      // ======== 一次性任务执行 ========
+      // ======== One-shot Task Execution ========
       {
         dshToolName: 'cli-hub:opencode:run-task',
         description:
-          '用本机 OpenCode 一次性执行一个文本任务并返回结果（自动复用已配置的 LLM API Key/额度）。适合"修改代码/分析文本/草拟内容"等任务。',
+          'Run a one-shot text task on local OpenCode and return the result (automatically reuses configured LLM API keys/quota). Suited for tasks such as "code modification / text analysis / content drafting".',
         inputSchema: {
           type: 'object',
           required: ['task'],
           properties: {
-            task: { type: 'string', minLength: 2, maxLength: 8000, description: '要执行的任务描述' },
+            task: { type: 'string', minLength: 2, maxLength: 8000, description: 'Task description to execute' },
             context: {
               type: 'string',
-              description: '附加上下文/背景知识（如代码片段、文件内容、说明）',
+              description: 'Additional context/background knowledge (e.g. code snippets, file contents, explanations)',
             },
             workdir: {
               type: 'string',
-              description: '执行工作目录（默认 = 当前 DSH workspace）',
+              description: 'Working directory for execution (default = current DSH workspace)',
             },
             model: {
               type: 'string',
-              description: '模型名（留空使用默认）',
+              description: 'Model name (leave empty for default)',
             },
             provider: {
               type: 'string',
-              description: 'provider 名（如 anthropic/openai/deepseek/xai 等，留空使用默认）',
+              description: 'Provider name (e.g. anthropic/openai/deepseek/xai; leave empty for default)',
             },
           } satisfies Record<string, any> as any,
         },
