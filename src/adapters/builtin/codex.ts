@@ -19,11 +19,11 @@ export const codexAdapter = defineCliAdapter({
   fingerprint: {
     commandNames: ['codex', 'openai-codex', 'codex-cli', 'codex-code-mode-host'],
     versionArgs: ['--version'],
-    versionPattern: /codex(?:\s*cli)?\s*v?([0-9][\w.+-]*)/i,
+    versionPattern: /codex(?:-?\s*cli)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.codex', '~/.config/codex'],
     envVars: ['OPENAI_API_KEY', 'CODEX_API_KEY'],
     authCheck: {
-      cmd: 'codex auth status',
+      cmd: 'codex login status',
       expectAuthenticated: /(logged[-\s]?in|authenticated|valid|active|signed in)/i,
       expectUnauthenticated: /(not logged|unauthenticated|no.*credential|please.*login|signed out)/i,
     },

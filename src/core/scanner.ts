@@ -587,6 +587,9 @@ export class ScannerServiceImpl implements ScannerService {
     args: string[],
     timeoutMs: number,
   ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+    // Windows: npm global bins generate three shims (extensionless sh script / .cmd / .ps1);
+    // resolve the extensionless path to a real .cmd/.exe/.bat variant before spawning.
+    file = this._resolveWinExecutable(file);
     // macOS launchd background processes reset PATH; add all bin dirs from _collectScanDirs
     // so spawned subprocesses can find ~/.local/bin/claude, /opt/homebrew/bin/gemini, etc.
     const scanEnv = this._withExtendedPath(process.env);
@@ -610,6 +613,21 @@ export class ScannerServiceImpl implements ScannerService {
     return await this._safeExecNative(file, args, timeoutMs);
   }
 
+  /**
+   * On Windows, npm global bins generate three shims: extensionless (sh script), .cmd and .ps1.
+   * Node cannot spawn the extensionless sh script or a .cmd directly (EINVAL); .cmd/.bat must go
+   * through cmd.exe. This resolves an extensionless path to an actually existing .cmd/.exe/.bat variant.
+   */
+  private _resolveWinExecutable(file: string): string {
+    if (process.platform !== 'win32') return file;
+    if (file.toLowerCase().endsWith('.cmd') || file.toLowerCase().endsWith('.bat')) return file;
+    if (path.extname(file)) return file;
+    for (const ext of ['.cmd', '.exe', '.bat']) {
+      try { if (fs.existsSync(file + ext)) return file + ext; } catch { /* ignore */ }
+    }
+    return file;
+  }
+
   private _safeExecNative(
     file: string,
     args: string[],
@@ -631,7 +649,16 @@ export class ScannerServiceImpl implements ScannerService {
         // macOS launchd background processes reset PATH to /usr/bin:/bin:/usr/sbin:/sbin
         // Reuse all dirs derived by _collectScanDirs so ~/.local/bin/claude etc. can be found
         const env = this._withExtendedPath(process.env);
-        child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
+        const lower = file.toLowerCase();
+        // Windows .cmd/.bat can only execute via cmd.exe; args come from adapter fingerprints
+        // (fixed flags), so quote whitespace/special-char args and pass the line verbatim to cmd.
+        if (lower.endsWith('.cmd') || lower.endsWith('.bat')) {
+          const comspec = process.env.ComSpec || 'cmd.exe';
+          const line = [file, ...args].map(a => /[\s"&|<>^]/.test(a) ? '"' + a.replace(/"/g, '""') + '"' : a).join(' ');
+          child = spawn(comspec, ['/d', '/s', '/c', line], { stdio: ['ignore', 'pipe', 'pipe'], env, windowsVerbatimArguments: true });
+        } else {
+          child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
+        }
       } catch (e: any) {
         clearTimeout(t);
         done = true;

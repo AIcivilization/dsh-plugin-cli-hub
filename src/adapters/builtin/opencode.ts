@@ -19,13 +19,15 @@ export const opencodeAdapter = defineCliAdapter({
   fingerprint: {
     commandNames: ['opencode', 'opencode-cli', 'opencode-agent'],
     versionArgs: ['--version'],
-    versionPattern: /opencode\s*v?([0-9][\w.+-]*)/i,
-    configPaths: ['~/.opencode', '~/.config/opencode'],
+    versionPattern: /(?:opencode(?:-cli)?\s*)?v?([0-9][\w.+-]*)/i,
+    configPaths: ['~/.opencode', '~/.config/opencode', '~/.local/share/opencode', '~/AppData/Roaming/opencode'],
     envVars: ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'DEEPSEEK_API_KEY', 'OPENCODE_API_KEY'],
     authCheck: {
-      cmd: 'opencode auth status',
-      expectAuthenticated: /(logged[-\s]?in|authenticated|valid|active|signed in)/i,
-      expectUnauthenticated: /(not logged|unauthenticated|no.*credential|please.*login|signed out)/i,
+      // `opencode auth status` does not exist in opencode v1.x; the real credential
+      // listing is `opencode auth list` ("0 credentials" is the logged-out signature).
+      cmd: 'opencode auth list',
+      expectAuthenticated: /credentials/i,
+      expectUnauthenticated: /0 credentials/i,
     },
   },
 
