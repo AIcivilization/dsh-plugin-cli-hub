@@ -1,13 +1,13 @@
 /**
- * Cordis 主入口（松耦合类型版）
+ * Cordis main entry (loosely-coupled types variant)
  *
- * 关于"为什么不直接 extends cordis.Service + Schema 配置"：
- *   DSH 目前是 rc 快速迭代版，cordis 4.0.0-rc.8 的 type export 不统一（Schema/TypedEvent/Fragment 不在根命名空间）。
- *   为避免在 plugin 层和 DSH 内部版本强耦合导致无法编译，这里采用：
- *     · Config 用纯 TS 类型 + 手动默认值（不使用 Schema 自动校验）
- *     · ctx.emit 用显式 string 名称 + (thisArg as any) 绕过 cordis Events extends 递归
- *     · ctx.set('cliHub', ...) 用 duck-typing，不要求 Service 基类
- *   runtime 语义完全等价；等 DSH 正式 1.0 发布后可以一次性切换回强类型。
+ * On "why not directly extend cordis.Service + Schema config":
+ *   DSH is currently in fast rc iteration; cordis 4.0.0-rc.8's type exports are inconsistent (Schema/TypedEvent/Fragment are not in the root namespace).
+ *   To avoid tight coupling between the plugin layer and DSH's internal version breaking compilation, we adopt:
+ *     · Config as a pure TS type + manual defaults (no Schema auto-validation)
+ *     · ctx.emit with explicit string names + (thisArg as any) to bypass cordis Events extends recursion
+ *     · ctx.set('cliHub', ...) with duck-typing, no Service base class required
+ *   Runtime semantics are fully equivalent; once DSH officially ships 1.0 we can switch back to strong typing in one go.
  */
 import type { Context, Effect, Events as CordEvents } from 'cordis';
 import { createDefaultScanner } from './core/scanner';
@@ -29,14 +29,14 @@ import type {
 } from './core/types';
 import { CliHubStorage, ScopedStorageLike } from './core/storage';
 
-// === Re-exports（消费者 import from 'dsh-plugin-cli-hub'）===
+// === Re-exports (consumers import from 'dsh-plugin-cli-hub') ===
 export { defineCliAdapter } from './adapters/define';
 export { loadBuiltinAdapters, BUILTIN_ADAPTERS } from './adapters/builtin';
-// 仅供测试 / 调试脚本使用：直接构造 AgentGateway / ToolGateway 实例而不走完整 Cordis 启动
+// For tests / debug scripts only: construct AgentGateway / ToolGateway instances directly without full Cordis startup
 export { createAgentGateway, AgentGatewayImpl } from './core/gateway-agent';
 export type { AgentSession, AgentGateway, AgentSessionStatus } from './core/gateway-agent';
 export { createToolGateway } from './core/gateway-tool';
-// 子插件导出，方便外部手动挂载（e2e / 自定义注入 settings/http 后调用）
+// Sub-plugin exports for external manual mounting (e2e / calling after custom injection of settings/http)
 export const webSubPlugin = webPlugin;
 export const cliSubPlugin = cliPlugin;
 export type {
@@ -57,35 +57,38 @@ export type {
 
 export const name = 'dsh-plugin-cli-hub';
 /**
- * inject 设计决策（第 3 版，对齐 DSH 0.1.1-rc.1）：
+ * inject design decision (v3, aligned with DSH 0.1.1-rc.1):
  *
- *  Cordis v4 的 ctx proxy trap 规则（见 cordis/lib/index.js L671-695）：
- *    · 如果 fiber.runtime 存在（即被 loader 加载），那么读 `ctx.<name>` 时，
- *      若 `<name>` 不在 `fiber.inject` 数组中 → 直接抛 `cannot get property "X" without inject`。
- *    · 仅当 fiber.runtime 为空（root fiber）时才走 `reflect.get(name, false)` bypass。
+ *  Cordis v4 ctx proxy trap rules (see cordis/lib/index.js L671-695):
+ *    · If fiber.runtime exists (i.e. loaded by the loader), then when reading `ctx.<name>`,
+ *      if `<name>` is not in the `fiber.inject` array → it throws `cannot get property "X" without inject` directly.
+ *    · Only when fiber.runtime is empty (root fiber) does the `reflect.get(name, false)` bypass apply.
  *
- *  这意味着之前 `inject = []` 让 fiber 立刻激活的同时，所有 `ctx.webServer` 等
- *  service 访问全部被 proxy trap 拒绝。`safeGet` 的 `reflect.get(name, false)`
- *  fallback 只在 root fiber 工作；在 DSH loader 加载的子 fiber 里仍然返回 undefined。
+ *  This means the previous `inject = []` let the fiber activate immediately while all
+ *  service accesses like `ctx.webServer` were rejected by the proxy trap. `safeGet`'s
+ *  `reflect.get(name, false)` fallback only works on the root fiber; in child fibers
+ *  loaded by the DSH loader it still returns undefined.
  *
- *  修复：把需要访问的 cordis service 显式加到 inject。webServer 是 DSH web profile
- *  必备服务（由 @deepseek-ai/dsh-host-webserver 提供），把它加进 inject 后：
- *    · fiber 在 webServer 服务就绪后才激活（避免早激活拿不到）
- *    · `ctx.webServer` 可直接访问，HTTP 路由能挂上
- *  其他服务（storage/settings/tools/logger/subprocess）继续走 safeGet 兜底，
- *  因为它们在测试环境或非 web profile 中可能不存在，强行 inject 会死锁。
+ *  Fix: explicitly add the cordis services we need to access into inject. webServer is a
+ *  mandatory service for the DSH web profile (provided by @deepseek-ai/dsh-host-webserver);
+ *  after adding it to inject:
+ *    · the fiber activates only after the webServer service is ready (avoids activating too early and missing it)
+ *    · `ctx.webServer` is directly accessible, so HTTP routes can be mounted
+ *  Other services (storage/settings/tools/logger/subprocess) keep using the safeGet
+ *  fallback, because they may not exist in test environments or non-web profiles;
+ *  force-injecting them would deadlock.
  */
 export const inject: string[] = [];
 
-/** 安全读取 Cordis ctx 上的属性：全链路 try/catch。
- *  - 在 inject=['webServer'] 后，ctx.webServer 直接可读；其他服务仍可能抛错需要兜底。
- *  - safeGet 的 reflect.get(name, false) fallback 仅在 root fiber 生效；
- *    被 loader 加载的子 fiber 中，未 inject 的 service 名会抛
- *    `cannot get property "X" without inject`，由 try/catch 兜底返回 undefined。
+/** Safely read a property on the Cordis ctx: try/catch on every path.
+ *  - With inject=['webServer'], ctx.webServer is directly readable; other services may still throw and need a fallback.
+ *  - safeGet's reflect.get(name, false) fallback only takes effect on the root fiber;
+ *    in child fibers loaded by the loader, non-injected service names throw
+ *    `cannot get property "X" without inject`, caught by try/catch and returning undefined.
  */
 function safeGet(ctx: any, name: string): any {
   if (!ctx) return undefined;
-  // 路径 0：如果有 raw/internal（部分 DSH 版本暴露的 proxy 后端），直接取跳过 trap
+  // Path 0: if raw/internal exists (the proxy backend exposed by some DSH versions), read it directly to skip the trap
   var raw: any = undefined;
   try {
     if ((ctx as any).internal !== undefined) raw = (ctx as any).internal;
@@ -103,7 +106,7 @@ function safeGet(ctx: any, name: string): any {
       if (Object.prototype.hasOwnProperty.call(svc, name)) return svc[name];
     }
   } catch {}
-  // 路径 0.5：部分 DSH/cordis 版本使用 Context.get(name, required?) 模式
+  // Path 0.5: some DSH/cordis versions use the Context.get(name, required?) pattern
   try {
     var ctxAny = (ctx as any);
     if (ctxAny !== null && typeof ctxAny.get === 'function') {
@@ -111,7 +114,7 @@ function safeGet(ctx: any, name: string): any {
       if (vGet !== undefined) return vGet;
     }
   } catch {}
-  // 路径 1：Cordis 官方 reflect.get bypass
+  // Path 1: official Cordis reflect.get bypass
   try {
     var reflect: any = (ctx as any).reflect;
     if (reflect !== null && reflect !== undefined && typeof reflect.get === 'function') {
@@ -119,7 +122,7 @@ function safeGet(ctx: any, name: string): any {
       if (vRefl !== undefined) return vRefl;
     }
   } catch {}
-  // 路径 1.5：ctx.runtime / ctx.fiber.runtime 的 services map
+  // Path 1.5: services map of ctx.runtime / ctx.fiber.runtime
   try {
     var rts: any = undefined;
     var ctxAny2 = (ctx as any);
@@ -141,7 +144,7 @@ function safeGet(ctx: any, name: string): any {
       }
     }
   } catch {}
-  // 路径 2：fallback 裸读（headless 非 cordis 环境）
+  // Path 2: fallback plain read (headless non-cordis environments)
   try { var v2 = ctx[name]; if (v2 !== undefined) return v2; } catch {}
   return undefined;
 }
@@ -169,7 +172,7 @@ export interface Config {
 
 export function apply(ctx: Context, config: Config = {}) {
   const anyCtx = ctx as any;
-  // ============== 所有 ctx 原生服务，统一走 safeGet（绕过 inject 白名单检查 + fiber pending）==============
+  // ============== All native ctx services uniformly go through safeGet (bypasses inject allowlist checks + fiber pending) ==============
   const $logger  = safeGet(ctx, 'logger');
   const $storage = safeGet(ctx, 'storage');
   const $set     = safeGet(ctx, 'set');
@@ -186,7 +189,7 @@ export function apply(ctx: Context, config: Config = {}) {
     error: (...a: any[]) => console.error('[cli-hub]', ...a),
   };
 
-  // ====== 应用默认配置 ======
+  // ====== Apply default config ======
   const scanCfg = {
     defaultDepth: config.scan?.defaultDepth ?? 'l3' as ScanDepth,
     autoRefreshIntervalSec: config.scan?.autoRefreshIntervalSec ?? 1800,
@@ -204,7 +207,7 @@ export function apply(ctx: Context, config: Config = {}) {
   };
   const enabledOverrides = config.adapters?.enabledOverrides ?? {};
 
-  // --- 1. Storage（尽量用 ctx.storage.scoped，没有就退化到内存版）---
+  // --- 1. Storage (prefer ctx.storage.scoped; fall back to an in-memory version if unavailable) ---
   let scopedStorage: ScopedStorageLike;
   if ($storage && typeof $storage === 'object' && typeof ($storage as any).scoped === 'object') {
     scopedStorage = ($storage as any).scoped;
@@ -239,7 +242,7 @@ export function apply(ctx: Context, config: Config = {}) {
     sandboxLevel: gwCfg.sandboxLevel === 'strict' ? 'strict' : 'default',
   });
 
-  // --- 6. 聚合 cliHub API ---
+  // --- 6. Aggregate cliHub API ---
   const cliHub: CliHubService = {
     registry: registry as any,
     scanner: scanner as any,
@@ -268,7 +271,7 @@ export function apply(ctx: Context, config: Config = {}) {
         },
       };
       await storage.saveLastScan(items);
-      // 异步：刷新 enabled adapter 的 tool 注册
+      // Async: refresh tool registrations for enabled adapters
       queueMicrotask(() => {
         (toolGateway as any).syncRegistrations(items.filter(i => i.adapterId)).catch((e: any) =>
           logger.warn('syncRegistrations error:', e?.message ?? e),
@@ -293,31 +296,31 @@ export function apply(ctx: Context, config: Config = {}) {
       registry.setEnabled(adapterId, false);
       storage.persistAdapterEnabled(adapterId, false).catch(() => {});
       (toolGateway as any).unregisterForAdapter?.(adapterId);
-      // 禁用时同时 kill 掉正在跑的 agent session，避免继续消费额度
+      // On disable, also kill any running agent session to avoid continued quota consumption
       agentGateway.stop(adapterId).catch((e: any) => logger.warn?.('stop agent session failed:', e?.message ?? e));
       emit('cli-hub/cli-disabled', { adapterId });
     },
   };
 
-  // 挂到 ctx（兼容 DSH 的 ctx.set、ctx.reflect.provide，以及作为 reflect 存储的 getter）
+  // Mount onto ctx (compatible with DSH's ctx.set, ctx.reflect.provide, and as the reflect store's getter)
   try {
-    // 方式 1：DSH ctx.set（如果有）
+    // Method 1: DSH ctx.set (if available)
     if (typeof $set === 'function') {
       try { $set('cliHub', cliHub); } catch {}
     }
-    // 方式 2：Cordis 原生 reflect.provide（挂到当前 fiber store，子插件可访问）
+    // Method 2: native Cordis reflect.provide (mounted onto the current fiber store, accessible to sub-plugins)
     const reflect = safeGet(ctx, 'reflect');
     if (reflect && typeof reflect.provide === 'function') {
       try { reflect.provide('cliHub', cliHub, () => true); } catch {}
     }
-    // 方式 3：如果父 fiber 的 runtime 不存在（headless 精简环境），尝试直接赋值
+    // Method 3: if the parent fiber's runtime does not exist (headless minimal environment), try direct assignment
     try {
       const fiber = (ctx as any).fiber;
       if (!fiber?.runtime) { (ctx as any).cliHub = cliHub; }
     } catch {}
   } catch { /* ignore all */ }
 
-  // --- 7. 事件转发（用 $emit/$parallel，不走 anyCtx.xxx 避免 inject 白名单拦截）---
+  // --- 7. Event relaying (use $emit/$parallel instead of anyCtx.xxx to avoid inject allowlist interception) ---
   function emit(name: string, payload: any) {
     try {
       if (typeof $emit === 'function') $emit(name, payload);
@@ -346,7 +349,7 @@ export function apply(ctx: Context, config: Config = {}) {
   ]) {
     try { (toolGateway as any).on?.(evt, (p: any) => emit(relayed, p)); } catch {}
   }
-  // Agent 事件转发
+  // Agent event relaying
   for (const [evt, relayed] of [
     ['agent-spawned', 'cli-hub/agent-spawned'] as const,
     ['agent-ready', 'cli-hub/agent-ready'] as const,
@@ -356,7 +359,7 @@ export function apply(ctx: Context, config: Config = {}) {
     try { (agentGateway as any).on?.(evt, (p: any) => emit(relayed, p)); } catch {}
   }
 
-  // --- 9. dispose 钩子：DSH 关闭时杀全部 agent，避免孤儿进程 ---
+  // --- 9. dispose hook: kill all agents when DSH shuts down to avoid orphan processes ---
   const doDispose = async () => {
     try { await agentGateway.stopAll(); }
     catch (e: any) { logger.warn?.('agent stopAll failed:', e?.message ?? e); }
@@ -365,20 +368,20 @@ export function apply(ctx: Context, config: Config = {}) {
     try {
       $on('dispose', doDispose);
     } catch {
-      // Cordis 有些 rc 版本 dispose 不是事件名，fallback 到 process exit
+      // In some Cordis rc versions dispose is not an event name; fall back to process exit
       (process as any).once?.('beforeExit', doDispose);
     }
   } else {
     (process as any).once?.('beforeExit', doDispose);
   }
 
-  // --- 8. ready 副作用：加载持久化状态 + 首次 L1 扫描 + 后台刷新 ---
+  // --- 8. ready side effects: load persisted state + first L1 scan + background refresh ---
   const onReady = async () => {
     logger.debug?.('plugin ready. adapter count=', (registry as any).size);
     const persisted = await storage.loadAdapterEnabledStates();
     for (const [id, enabled] of Object.entries(persisted)) registry.setEnabled(id, enabled);
     try {
-      // 首次扫描走 cliHub.scan（会触发 syncRegistrations → ctx.tools 注册）
+      // The first scan goes through cliHub.scan (triggers syncRegistrations → ctx.tools registration)
       const first = await (cliHub as any).scan({ depth: 'l1' });
       logger.info?.('initial L1 scan done. items=', first?.items?.length ?? first?.length ?? 0);
     } catch (err: any) {
@@ -403,25 +406,25 @@ export function apply(ctx: Context, config: Config = {}) {
 
   logger.info?.('loaded.');
 
-  // --- 挂载子插件：CLI 命令 + Web UI ---
-  // 可靠性说明（第 3 次重构，之前 tagApply 把 _cliHub 写到模块 ns/apply 函数仍失败）：
-  //   · Cordis DSH 的 $plugin(factory, cfg) 会把 factory 重新 unwrap 为插件对象并进入新 fiber，
-  //     导致 apply._cliHub 在新 fiber 里丢失。所以优先直接调用 `apply(ctx, subCfg)`，
-  //     在同一个函数作用域里用"实参显式传 + 闭包直接可见"保证 100% 拿到 cliHub。
-  //   · factory.apply(ctx, subCfg) 不是 fn.call —— 这里其实调用 ns.apply（命名导出 apply 函数）
-  //     与 ns.default（默认导出 apply 引用同一个函数）。两种同时调用即可覆盖。
+  // --- Mount sub-plugins: CLI commands + Web UI ---
+  // Reliability notes (3rd refactor; previously writing _cliHub onto the module ns/apply function via tagApply still failed):
+  //   · Cordis DSH's $plugin(factory, cfg) re-unwraps the factory into a plugin object and enters a new fiber,
+  //     causing apply._cliHub to be lost in the new fiber. So prefer calling `apply(ctx, subCfg)` directly,
+  //     using "explicit argument passing + closure visibility" within the same function scope to guarantee 100% access to cliHub.
+  //   · factory.apply(ctx, subCfg) is not fn.call — what is actually called here is ns.apply (the named export apply function)
+  //     and ns.default (the default export referencing the same function). Calling both covers all cases.
   const subCfg: any = { _cliHub: cliHub };
 
-  // 直接把 cliHub 再复制到 subCfg 的三个位置（有些 rc 版本把 config 包一层 cfg.config）
+  // Also copy cliHub to three positions on subCfg (some rc versions wrap config in an extra cfg.config layer)
   subCfg.config = subCfg.config ?? { _cliHub: cliHub };
   (subCfg.config as any)._cliHub = cliHub;
 
   const mountSubPluginDirect = (ns: any, label: string, applyFnName: 'apply' | 'default') => {
-    // 优先 direct call（不进新 fiber，不走 inject 解析），失败再 fallback $plugin
+    // Prefer a direct call (no new fiber, no inject resolution); fall back to $plugin on failure
     const fn = (ns as any)?.[applyFnName];
     if (typeof fn !== 'function') return false;
     try {
-      // 显式把 cliHub 作为第三个"隐藏实参"传，避免任何 cfg 包装丢失时还能从 arguments[2] 取
+      // Explicitly pass cliHub as a third "hidden argument" so it can still be read from arguments[2] if any cfg wrapping is lost
       fn.call(null, ctx, subCfg, cliHub);
       return true;
     } catch (e: any) {
@@ -430,7 +433,7 @@ export function apply(ctx: Context, config: Config = {}) {
     }
   };
 
-  // 按"直接调用 → $plugin → module 根函数（如果本身是函数）"顺序重试
+  // Retry in order: "direct call → $plugin → module root function (if it is itself a function)"
   const mountSubPlugin = (factory: any, label: string) => {
     if (!factory) return;
     let ok = false;
@@ -455,30 +458,31 @@ export function apply(ctx: Context, config: Config = {}) {
 }
 
 // ============================================================
-// 把 inject 挂到 apply 函数对象本身（和 `export const inject` 命名导出并存）。
-// 原因：DSH/Cordis 的 cordis-plugin-loader unwrapExports 取 module default，
-// 然后走 `registry.plugin(plugin, config)`，内部 `Inject.resolve(plugin.inject)`。
-// 如果 inject 只作为命名导出存在（没挂到 default=apply 函数对象上），那么
-// plugin.inject = undefined，Inject.resolve 返回空 map，乍看没问题；但是
-// `Context.reflect` 里的 get trap 读到 ctx.fiber.runtime 非空时，就会按"必须有
-// inject 白名单"语义来拦截 ctx.storage 这类读取 → 抛「cannot get property storage
-// without inject」。双写不影响调用方（命名导出给单测/外部脚本；apply.inject
-// 给 loader 识别）。
+// Attach inject onto the apply function object itself (coexists with the `export const inject` named export).
+// Reason: DSH/Cordis's cordis-plugin-loader unwrapExports takes the module default,
+// then goes through `registry.plugin(plugin, config)`, which internally does `Inject.resolve(plugin.inject)`.
+// If inject only exists as a named export (not attached to the default=apply function object), then
+// plugin.inject = undefined and Inject.resolve returns an empty map — seemingly fine; but
+// when the get trap in `Context.reflect` reads ctx.fiber.runtime as non-null, it intercepts
+// reads like ctx.storage with "inject allowlist required" semantics → throws "cannot get
+// property storage without inject". The dual write does not affect callers (named export
+// for unit tests/external scripts; apply.inject for loader identification).
 //
-// 注：
-//   · inject 是空数组 → 任何时候都能激活 fiber（我们对所有 ctx 属性都有 duck-typing
-//     fallback，不要求 service 一定 provide，见上方注释）。
-//   · Config 我们故意不挂。Cordis `resolveConfig` 在 runtime.Config 非 undefined
-//     时会走 Standard Schema.validate，而我们的 Config 是纯 TS 接口（没有 ~standard
-//     字段），如果乱挂为 {} 就会 "Cannot read properties of undefined reading validate"。
+// Notes:
+//   · inject is an empty array → the fiber can activate at any time (we have duck-typing
+//     fallbacks for all ctx properties and do not require a service to be provided; see comments above).
+//   · We deliberately do not attach Config. Cordis `resolveConfig` runs
+//     Standard Schema.validate when runtime.Config is not undefined, but our Config is a
+//     pure TS interface (no ~standard field); carelessly attaching it as {} would cause
+//     "Cannot read properties of undefined reading validate".
 // ============================================================
 (apply as any).inject = inject;
 
 export default apply;
 
 // ============================================================
-// 类型声明：让 DSH/Cordis 上下文能感知 ctx.cliHub + 自定义事件
-// （采用 declare module，但不强绑定 Events 递归扩展）
+// Type declarations: let the DSH/Cordis context be aware of ctx.cliHub + custom events
+// (uses declare module, without strongly binding the Events recursive extension)
 // ============================================================
 declare module 'cordis' {
   interface Context {

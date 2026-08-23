@@ -1,18 +1,18 @@
 /**
- * ToolGateway —— Tool 模式接入 DSH ctx.tools
+ * ToolGateway — Tool mode integration into DSH ctx.tools
  *
- * 工作流程：
- *   · syncRegistrations(items) — 根据 scan 结果 + adapter 能力声明，动态在 ctx.tools 注册 / 注销
- *   · 每个声明的 Tool，注册时绑定：
- *       1. pre-execute：检查 adapter.enabled + 额度预扣 + 冷却
- *       2. execute：命令模板渲染 + subprocess.exec（严格沙箱）
- *       3. post-execute：额度记录 + 调用历史 + 事件发射
- *   · unregisterForAdapter(id) — 用户禁用 adapter 时清理
+ * Workflow:
+ *   · syncRegistrations(items) — dynamically register/unregister in ctx.tools based on scan results + adapter capability declarations
+ *   · Each declared Tool is bound at registration time with:
+ *       1. pre-execute: check adapter.enabled + quota pre-deduction + cooldown
+ *       2. execute: command template rendering + subprocess.exec (strict sandbox)
+ *       3. post-execute: quota recording + call history + event emission
+ *   · unregisterForAdapter(id) — cleanup when the user disables an adapter
  *
- * 安全要点：
- *   · 模板中 {{var}} 都做 shell 安全转义（禁止 &&/`|$/$(/ 等）
- *   · sandbox strict 级别：用户必须明确把需要的文件声明为 input/output 变量
- *   · 连续 N 次失败 → cooldown 阻止调用 30s，防止打爆额度
+ * Security notes:
+ *   · {{var}} in templates are all shell-escaped (forbidding &&/`|$/$(/ etc.)
+ *   · sandbox strict level: users must explicitly declare needed files as input/output variables
+ *   · N consecutive failures → cooldown blocks calls for 30s to prevent burning through the quota
  */
 import os from 'node:os';
 import path from 'node:path';
@@ -36,9 +36,9 @@ export interface ToolGatewayConfig {
 }
 
 export interface ToolGateway {
-  /** 扫描完成后调用：按已发现且已启用的 adapter 注册 tools */
+  /** Called after a scan completes: register tools for discovered and enabled adapters */
   syncRegistrations(items: ScanItem[]): Promise<void>;
-  /** 禁用 adapter 时调用 */
+  /** Called when an adapter is disabled */
   unregisterForAdapter(adapterId: string): void;
 
   on(event: 'tool-called', cb: (p: { id: string; adapterId: string; toolName: string; input: any }) => void): this;
@@ -52,39 +52,39 @@ export interface ToolGateway {
 
 interface RegisteredTool {
   adapterId: string;
-  execPath: string;        // CLI 完整路径
+  execPath: string;        // Full CLI path
   def: ToolCapabilityDeclaration;
   cooldown: { failures: number; until: number | null };
-  unregister?: () => void; // DSH 提供的注销句柄（如有）
+  unregister?: () => void; // Unregister handle provided by DSH (if any)
 }
 
-// === 变量渲染：execFile 语义 = 参数数组不经 shell，直接替换 {{var}}，不做 shell 转义 ===
-//    （注意：当且仅当 mapping.kind === 'template' 且整个模板需要经过 /bin/sh -c 时才要转义，
-//     我们这里一律走 execFile：cmd 是可执行文件路径，args 是单独的数组 token，所以不需要任何 shell 字符处理。
-//     如果某个 adapter 一定要经 shell，它应该在 commandMapping.resolver 里显式 args = ['-c', <escaped_script>], cmd = '/bin/sh'。）
+// === Variable rendering: execFile semantics = the args array bypasses the shell, {{var}} is replaced directly, no shell escaping ===
+//    (Note: escaping is needed if and only if mapping.kind === 'template' and the whole template must go through /bin/sh -c.
+//     Here we always use execFile: cmd is an executable file path and args are separate array tokens, so no shell character handling is needed.
+//     If an adapter must go through a shell, it should explicitly set args = ['-c', <escaped_script>], cmd = '/bin/sh' in commandMapping.resolver.)
 function renderValue(value: unknown): string {
   return value == null ? '' : String(value);
 }
 
 /**
- * 安全断言：每个 argv 字符串必须是普通 JS 字符串，不含 NUL 字节，长度不超过 100k。
- * 这是为了在任何渲染路径（argv / template / resolver）上都避免 execFile 的底层问题。
+ * Safety assertion: every argv string must be a plain JS string, contain no NUL bytes, and be at most 100k long.
+ * This avoids execFile low-level issues on any rendering path (argv / template / resolver).
  */
 const MAX_ARG_LEN = 100_000;
 function sanitizeArg(what: string, v: string, adapterId: string, toolName: string): string {
   if (typeof v !== 'string') {
     throw new Error(
-      `[cli-hub] ${adapterId}/${toolName}: ${what} 必须是字符串类型，实际是 ${typeof v}`,
+      `[cli-hub] ${adapterId}/${toolName}: ${what} must be a string, got ${typeof v}`,
     );
   }
   if (v.length > MAX_ARG_LEN) {
     throw new Error(
-      `[cli-hub] ${adapterId}/${toolName}: ${what} 长度 ${v.length} 超过上限 ${MAX_ARG_LEN}`,
+      `[cli-hub] ${adapterId}/${toolName}: ${what} length ${v.length} exceeds limit ${MAX_ARG_LEN}`,
     );
   }
   if (v.includes('\0')) {
     throw new Error(
-      `[cli-hub] ${adapterId}/${toolName}: ${what} 包含 NUL 字节，拒绝执行`,
+      `[cli-hub] ${adapterId}/${toolName}: ${what} contains NUL bytes, refusing to execute`,
     );
   }
   return v;
@@ -103,7 +103,7 @@ export class ToolGatewayImpl implements ToolGateway {
     private _config: ToolGatewayConfig,
   ) {}
 
-  // ====== safeGet：使用共享 helper 绕过 Cordis inject 白名单 ======
+  // ====== safeGet: use the shared helper to bypass the Cordis inject allowlist ======
   private _safeGet(name: string): any {
     return safeGetCtx(this._ctx, name);
   }
@@ -127,14 +127,14 @@ export class ToolGatewayImpl implements ToolGateway {
       }
     }
 
-    // 注销已不存在的
+    // Unregister ones that no longer exist
     for (const [name] of Array.from(this._registered)) {
       if (!newMap.has(name)) {
         this._safeUnregister(name);
       }
     }
 
-    // 注册新的/已有的
+    // Register new/existing ones
     for (const [name, entry] of newMap) {
       await this._ensureRegistered(name, entry);
     }
@@ -152,13 +152,13 @@ export class ToolGatewayImpl implements ToolGateway {
     return this;
   }
 
-  // ============== 内部 ==============
+  // ============== Internal ==============
   private async _ensureRegistered(
     name: string,
     entry: { item: ScanItem; tool: ToolCapabilityDeclaration; adapterId: string },
   ): Promise<void> {
     const existing = this._registered.get(name);
-    if (existing && existing.execPath === entry.item.executablePath) return;  // 已注册且路径没变
+    if (existing && existing.execPath === entry.item.executablePath) return;  // Already registered and path unchanged
     if (existing) this._safeUnregister(name);
 
     const rt: RegisteredTool = {
@@ -173,27 +173,27 @@ export class ToolGatewayImpl implements ToolGateway {
 
     const toolsApi: any = this._safeGet('tools');
     if (!toolsApi) {
-      // DSH ctx.tools 不可用时（测试环境 / headless 精简），fallback 为空注册；
-      // 通过 cli-hub tool exec 命令仍可调用。
+      // When DSH ctx.tools is unavailable (test env / headless minimal build), fall back to no registration;
+      // tools can still be invoked via the cli-hub tool exec command.
       return;
     }
 
-    // DSH ToolRuntime.register(ToolDefinition) — 统一用 register 方法
+    // DSH ToolRuntime.register(ToolDefinition) — always use the register method
     const regFn: ((def: any) => () => void) | undefined =
       typeof toolsApi.register === 'function' ? toolsApi.register.bind(toolsApi) :
-      typeof toolsApi.define  === 'function' ? toolsApi.define.bind(toolsApi) :   // 兼容旧版/其他 host
+      typeof toolsApi.define  === 'function' ? toolsApi.define.bind(toolsApi) :   // Compatible with older versions/other hosts
       undefined;
     if (!regFn) return;
 
     try {
-      // 构造 DSH ToolDefinition 兼容形状：
+      // Build a DSH ToolDefinition compatible shape:
       //   { name, description, parameters (JSON Schema), output: { schema, render }, execute(args, exec) }
       const toolDef = {
         name,
         description: entry.tool.description,
         parameters: entry.tool.inputSchema ?? { type: 'object', properties: {}, additionalProperties: true },
         output: {
-          // 输出 schema：通用 text 内容
+          // Output schema: generic text content
           schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
           render: (_args: unknown, value: any) => {
             const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
@@ -201,12 +201,12 @@ export class ToolGatewayImpl implements ToolGateway {
           },
         },
         execute: async (args: unknown, exec: any) => {
-          // 适配两套签名：DSH 传 (args, exec)，我们内部用 (input, runtimeCtx)
+          // Adapt two signatures: DSH passes (args, exec), we use (input, runtimeCtx) internally
           const runtimeCtx: RuntimeContext = exec?.runtimeCtx ?? exec ?? {};
           const result = await this._executeTool(name, args, runtimeCtx);
-          // ToolDefinition.execute 需要返回 canonical JSON value（被 output.render 渲染）
-          // 我们的 _executeTool 返回 { content: [{ type:'text', text }] } 格式
-          // 提取 text 作为 canonical value
+          // ToolDefinition.execute must return a canonical JSON value (rendered by output.render)
+          // Our _executeTool returns the { content: [{ type:'text', text }] } format
+          // Extract text as the canonical value
           if (result?.content?.[0]?.text) return { text: result.content[0].text };
           return { text: JSON.stringify(result) };
         },
@@ -231,32 +231,32 @@ export class ToolGatewayImpl implements ToolGateway {
     const rt = this._registered.get(toolName);
     if (!rt) throw new Error(`tool not registered: ${toolName}`);
 
-    // 1. cooldown 检查
+    // 1. cooldown check
     if (rt.cooldown.until && Date.now() < rt.cooldown.until) {
       throw new Error(
-        `[cli-hub] tool ${toolName} 连续失败 ${this._config.failureCooldownCount} 次，` +
-        `已进入 cooldown，请 ${Math.ceil((rt.cooldown.until - Date.now()) / 1000)}s 后重试`,
+        `[cli-hub] tool ${toolName} failed ${this._config.failureCooldownCount} times in a row, ` +
+        `now in cooldown; retry after ${Math.ceil((rt.cooldown.until - Date.now()) / 1000)}s`,
       );
     }
 
-    // 2. 额度预检查（只是估算，不强拦截，depleted 也放行让 provider 决定）
+    // 2. Quota pre-check (estimate only, no hard blocking; even depleted is allowed through for the provider to decide)
     let quotaWarned = false;
     try {
       const q = await this._quota.get(rt.adapterId);
       if (q.total != null && q.remaining != null && q.remaining / q.total < 0.05) quotaWarned = true;
     } catch { /* ignore */ }
 
-    // 3. 事件 + 开始计时
+    // 3. Event + start timing
     const callId = randomUUID().slice(0, 8);
     const started = Date.now();
     this._emitter.emit('tool-called', { id: callId, adapterId: rt.adapterId, toolName, input });
 
     try {
-      // 4. 命令映射
+      // 4. Command mapping
       const cmdLine = this._renderCommand(rt, input, runtimeCtx);
       const timeout = rt.def.timeoutMs ?? 60_000;
 
-      // 5. 执行（优先 ctx.subprocess.exec —— 必须走 safeGetCtx，避免 Cordis proxy 拦）
+      // 5. Execute (prefer ctx.subprocess.exec — must go through safeGetCtx to avoid Cordis proxy interception)
       let sp: any = undefined;
       try { sp = safeGetCtx(this._ctx, 'subprocess'); } catch {}
       let stdout = '', stderr = '', exitCode: number | null = null, outputFile: string | undefined;
@@ -277,9 +277,9 @@ export class ToolGatewayImpl implements ToolGateway {
           exitCode = null;
         }
       } else {
-        // fallback：node child_process（只用于测试/开发）
+        // Fallback: node child_process (only for test/dev)
         const [{ spawn }] = await Promise.all([import('node:child_process')]);
-        // macOS launchd 后台进程会重置 PATH；补全常见 bin 目录
+        // macOS launchd background processes reset PATH; add common bin directories back
         const toolEnv = { ...process.env, ...(cmdLine.env ?? {}) };
         {
           const home = toolEnv.HOME || process.env.HOME || '';
@@ -310,10 +310,10 @@ export class ToolGatewayImpl implements ToolGateway {
       }
       outputFile = cmdLine.outputFile;
 
-      // 6. 解析输出
+      // 6. Parse output
       const result = this._parseOutput(rt.def, stdout, stderr, exitCode ?? -1, outputFile, runtimeCtx);
 
-      // 7. 成功：清 cooldown + 记额度 + 记历史
+      // 7. Success: reset cooldown + record quota + record history
       rt.cooldown.failures = 0;
       rt.cooldown.until = null;
       const credits = rt.def.estimatedCredits ?? 0;
@@ -401,7 +401,7 @@ export class ToolGatewayImpl implements ToolGateway {
       cmdToken = mapping.command;
       workdirVar = mapping.workdirVar;
       outputFileVar = mapping.outputFileVar;
-      // 填 __output__ 变量（若声明了 outputFileVar）
+      // Fill the __output__ variable (if outputFileVar is declared)
       if (outputFileVar) {
         (fullVars as any).__output__ =
           getVar(outputFileVar) ??
@@ -413,14 +413,14 @@ export class ToolGatewayImpl implements ToolGateway {
           continue;
         }
         if ('flag' in item) {
-          // pair 模式：变量有值就传 [flag, value]，否则跳过
+          // pair mode: if the variable has a value, pass [flag, value]; otherwise skip
           const v = getVar(item.var, item.defaultValue);
           if (v === undefined || v === null || v === '') continue;
           args.push(sanitizeArg('argv flag', item.flag, adapterId, toolName));
           args.push(sanitizeArg(`argv pair[${item.flag}]`, String(v), adapterId, toolName));
           continue;
         }
-        // 纯变量
+        // Bare variable
         let v = getVar(item.var, item.defaultValue);
         if (v === undefined || v === null || v === '') {
           if (item.skipIfEmpty) continue;
@@ -429,11 +429,11 @@ export class ToolGatewayImpl implements ToolGateway {
         args.push(sanitizeArg(`argv var[${item.var}]`, String(v), adapterId, toolName));
       }
     } else {
-      // kind: template（向后兼容，打 DEPRECATE 警告）
+      // kind: template (backward compatible, emits a DEPRECATE warning)
       const logger = this._logger();
       logger?.warn?.(
-        `[cli-hub] DEPRECATE: adapter ${adapterId} / tool ${toolName} 使用 kind: 'template'，` +
-        `将在 v0.2.0 移除，请迁移到 kind: 'argv'。`,
+        `[cli-hub] DEPRECATE: adapter ${adapterId} / tool ${toolName} uses kind: 'template' ` +
+        `(will be removed in v0.2.0); migrate to kind: 'argv'.`,
       );
       const tpl = mapping.template.trim();
       const tokens = tpl.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? [];
@@ -448,7 +448,7 @@ export class ToolGatewayImpl implements ToolGateway {
       }
       const renderTpl = (s: string): string =>
         s.replace(/\{\{\s*(\w+)\s*\}\}/g, (_m, name) => renderValue(fullVars[name]));
-      // 去掉字符串模板头尾的引号（如果 token 是被引号包的常量，恢复成不带引号的字符串 arg 传给 execFile）
+      // Strip leading/trailing quotes from template string tokens (if a token is a quoted constant, restore it to an unquoted string arg for execFile)
       const stripQuotes = (s: string): string => {
         if (s.length >= 2 && ((s[0] === '"' && s[s.length - 1] === '"') || (s[0] === "'" && s[s.length - 1] === "'"))) {
           return s.slice(1, -1);
@@ -464,7 +464,7 @@ export class ToolGatewayImpl implements ToolGateway {
       ));
     }
 
-    // cmd 解析：基名 → 用已扫描到的 execPath 完整路径替换（防止 PATH 劫持）
+    // cmd resolution: basename → replace with the scanned full execPath (to prevent PATH hijacking)
     const actualCmd: string = cmdToken.includes(path.sep)
       ? sanitizeArg('cmd', cmdToken, adapterId, toolName)
       : (rt.execPath ?? sanitizeArg('cmd fallback', cmdToken, adapterId, toolName));
@@ -494,16 +494,16 @@ export class ToolGatewayImpl implements ToolGateway {
     else if (parser === 'stderr-text') value = stderr;
     else if (parser === 'stdout-json') {
       try { value = JSON.parse(stdout); } catch (e: any) {
-        throw new Error(`tool ${def.dshToolName} 输出不是合法 JSON: ${stdout.slice(0, 200)}`);
+        throw new Error(`tool ${def.dshToolName} output is not valid JSON: ${stdout.slice(0, 200)}`);
       }
     } else if (parser === 'exit-code-only') {
       if (exitCode !== 0) throw new Error(`tool ${def.dshToolName} exit ${exitCode}: ${stderr.slice(0, 300)}`);
       value = { exitCode };
     } else {
       value = parser.fn(stdout, stderr, exitCode);
-      if (value instanceof Promise) value = this._awaitSync(value);  // 不支持异步 custom parser（简化）
+      if (value instanceof Promise) value = this._awaitSync(value);  // Async custom parsers not supported (simplified)
     }
-    // 有输出文件 → 注册附件 + 把 URL 加到返回里
+    // With an output file → register the attachment + add its URL to the return value
     if (outputFile && runtimeCtx.registerAttachment) {
       try {
         const a = runtimeCtx.registerAttachment(outputFile);
@@ -511,7 +511,7 @@ export class ToolGatewayImpl implements ToolGateway {
       } catch { /* ignore */ }
     }
     if (exitCode !== 0 && parser !== 'exit-code-only') {
-      // 非零退出但 parser 没声明为 exit-code-only：把 stderr 合并到返回或抛错
+      // Non-zero exit but parser not declared as exit-code-only: merge stderr into the return value or throw
       if (typeof value === 'object' && value) value._stderr = stderr;
       else value = { value, _stderr: stderr, _exitCode: exitCode };
     }
@@ -519,7 +519,7 @@ export class ToolGatewayImpl implements ToolGateway {
   }
 
   private _awaitSync<T>(_p: Promise<T>): T {
-    // 简化版：不支持异步 custom parser（类型系统已标记 fn 为同步，只是防御）
+    // Simplified: async custom parsers not supported (the type system marks fn as sync; this is just defensive)
     throw new Error('async custom parser not supported');
   }
 

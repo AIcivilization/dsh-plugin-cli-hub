@@ -1,9 +1,9 @@
 /**
- * 核心数据契约（松耦合版本：不直接强依赖 cordis rc 的内部 symbol）
+ * Core data contracts (loosely coupled: no hard dependency on cordis rc internal symbols)
  */
 import type { Service } from 'cordis';
 
-// 兼容 JSONSchema 类型（不锁定 json-schema-to-ts 的具体导出路径）
+// JSONSchema-compatible type (not tied to json-schema-to-ts's specific export paths)
 export type JSONSchema7 = {
   $schema?: string;
   $id?: string;
@@ -28,7 +28,7 @@ export type JSONSchema7 = {
 };
 
 // ============================================================
-// 1. 基础枚举
+// 1. Basic enums
 // ============================================================
 export type ScanDepth = 'l1' | 'l2' | 'l3';
 
@@ -45,7 +45,7 @@ export type AgentProtocol = 'acp' | 'mcp-stdio' | 'stdio-jsonrpc' | 'line-based'
 export type SandboxLevel = 'strict' | 'relaxed';
 
 // ============================================================
-// 2. CLI 指纹（Scanner 用）
+// 2. CLI fingerprint (used by Scanner)
 // ============================================================
 export interface CliFingerprint {
   commandNames: string[];
@@ -62,7 +62,7 @@ export interface CliFingerprint {
 }
 
 // ============================================================
-// 3. Tool / Agent 能力声明
+// 3. Tool / Agent capability declarations
 // ============================================================
 export interface ToolCapabilityDeclaration {
   dshToolName: string;
@@ -71,37 +71,39 @@ export interface ToolCapabilityDeclaration {
   commandMapping:
     | {
         /**
-         * 推荐方式：按数组传入 argv，每个变量独立一个 argv[i]，天然避免空格/引号注入。
-         * 支持字符串常量、变量、flag 开关（skipIfEmpty）、可选值四种形式。
+         * Recommended: pass argv as an array, one argv[i] per variable, naturally avoiding
+         * whitespace/quote injection. Supports four forms: string constants, variables,
+         * flag toggles (skipIfEmpty), and optional values.
          */
         kind: 'argv';
-        command: string;                              // 可执行文件基名或绝对路径，推荐基名，由 gateway-tool 替换为 rt.execPath
+        command: string;                              // Executable basename or absolute path; basename recommended, gateway-tool replaces it with rt.execPath
         args: Array<
-          | string                                    // 字面量，例如 '--json'
+          | string                                    // Literal, e.g. '--json'
           | {
-              /** 从 input / runtimeCtx 自动变量里取值 */
+              /** Take value from input / runtimeCtx automatic variables */
               var: string;
-              /** 若该变量为空或未定义，整个 argv 项（连同前面的 flag，如果在 pair 中）跳过不传 */
+              /** If this variable is empty or undefined, the whole argv item (including the preceding flag in pair mode) is skipped */
               defaultValue?: string;
-              /** 当值为空或 undefined 时跳过，而不是用 defaultValue/空串。纯 flag 场景用不到，纯 var 不传很方便 */
+              /** Skip when value is empty or undefined instead of using defaultValue/empty string. Not needed for pure flags; convenient for optional vars */
               skipIfEmpty?: boolean;
             }
           | {
-              /** pair 模式：若变量有值，则传 ['--flag', value]；否则都跳过 */
+              /** Pair mode: if the variable has a value, pass ['--flag', value]; otherwise skip both */
               flag: string;
               var: string;
               defaultValue?: string;
             }
         >;
-        outputFileVar?: string;                       // 声明 input 里哪个字段代表"输出文件路径"，会在 __output__ 变量等地方生效
-        workdirVar?: string;                          // 声明 input 里哪个字段代表"工作目录"，缺省走 runtimeCtx.workspace
+        outputFileVar?: string;                       // Declares which input field is the "output file path"; used by the __output__ variable and elsewhere
+        workdirVar?: string;                          // Declares which input field is the "working directory"; defaults to runtimeCtx.workspace
       }
     | {
         /**
-         * 【Deprecated，将在 v0.2.0 移除】
-         * 向后兼容的字符串模板方式。会在运行时记录 DEPRECATE 警告。
-         * 字符串里的引号、空格会按 shell token 切分，但变量依然直接替换为独立参数（execFile 不经 shell）。
-         * 新 adapter 请直接使用 kind: 'argv'。
+         * [Deprecated, will be removed in v0.2.0]
+         * Backward-compatible string template mode. Emits a DEPRECATE warning at runtime.
+         * Quotes and whitespace in the string are split as shell tokens, but variables are still
+         * substituted as standalone arguments (execFile bypasses the shell).
+         * New adapters should use kind: 'argv' directly.
          */
         kind: 'template';
         template: string;
@@ -158,7 +160,7 @@ export interface AgentCapabilityDeclaration {
 }
 
 // ============================================================
-// 4. 额度声明
+// 4. Quota declarations
 // ============================================================
 export interface QuotaDeclaration {
   method:
@@ -201,7 +203,7 @@ export interface QuotaInfo {
 }
 
 // ============================================================
-// 5. Adapter 完整定义
+// 5. Full adapter definition
 // ============================================================
 export interface CliAdapterDefinition {
   id: string;
@@ -222,7 +224,7 @@ export interface CliAdapterDefinition {
 }
 
 // ============================================================
-// 6. 运行期类型
+// 6. Runtime types
 // ============================================================
 export interface RuntimeContext {
   workspace: string;
@@ -257,9 +259,9 @@ export interface ScanResult {
 }
 
 // ============================================================
-// 7. ctx.cliHub 服务接口
-//    · 注意：不 extends cordis.Service 基类，避免 rc 版本的 symbol 冲突。
-//      运行期 ctx.set('cliHub', obj) 是 duck-typing。
+// 7. ctx.cliHub service interface
+//    · Note: does not extend the cordis.Service base class, to avoid symbol conflicts with rc versions.
+//      At runtime, ctx.set('cliHub', obj) is duck-typed.
 // ============================================================
 export type CliHubService = {
   registry: import('./registry').RegistryService;
@@ -273,5 +275,5 @@ export type CliHubService = {
   enable(adapterId: string): void;
   disable(adapterId: string): void;
 };
-// 允许作为 Service 语义兼容
+// Semantically compatible as a Service
 export type CliHubServiceCompat = CliHubService & Partial<Service>;

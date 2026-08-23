@@ -1,10 +1,10 @@
 /**
- * QuotaManagerService —— 额度管理
+ * QuotaManagerService — quota management
  *
- *   · Provider 查询（command / http / file / unknown）
- *   · 本地缓存（TTL = max(quota.refreshIntervalSec, config.cacheTtlSec)）
- *   · 本地估算累计（provider 无法实时查时用）
- *   · 阈值告警（quota-warning / quota-depleted 事件）
+ *   · Provider queries (command / http / file / unknown)
+ *   · Local cache (TTL = max(quota.refreshIntervalSec, config.cacheTtlSec))
+ *   · Local estimated usage accumulation (used when the provider cannot be queried in real time)
+ *   · Threshold alerts (quota-warning / quota-depleted events)
  */
 import { EventEmitter } from 'node:events';
 import type { Context } from 'cordis';
@@ -22,10 +22,10 @@ export interface QuotaManagerService {
   get(adapterId: string, forceRefresh?: boolean): Promise<QuotaInfo>;
   subscribe(adapterId: string, cb: (info: QuotaInfo) => void): () => void;
 
-  // Tool/Agent 调用成功后，记录估算额度
+  // Record estimated quota after a successful Tool/Agent call
   recordUsage(adapterId: string, capability: string, creditsEstimated: number): Promise<void>;
 
-  // 阈值
+  // Thresholds
   setWarningThreshold(adapterId: string, percentRemaining: number): void;
   getWarningThreshold(adapterId: string): number;
 
@@ -41,7 +41,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
   private _subscribers = new Map<string, Set<(info: QuotaInfo) => void>>();
   private _inflight = new Map<string, Promise<QuotaInfo>>();
   private _thresholds: Record<string, number> = {};
-  private _lastWarningAt: Record<string, number> = {};  // 告警节流（10min）
+  private _lastWarningAt: Record<string, number> = {};  // Alert throttling (10min)
 
   constructor(
     private _ctx: Context,
@@ -54,7 +54,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
     const def = this._registry.get(adapterId);
     if (!def) throw new Error(`adapter not found: ${adapterId}`);
 
-    // 1. cache hit（除非 forceRefresh）
+    // 1. Cache hit (unless forceRefresh)
     if (!forceRefresh) {
       const cache = await this._storage.loadQuotaCache();
       const entry = cache[adapterId];
@@ -64,7 +64,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
       }
     }
 
-    // 2. 去重并发查询
+    // 2. Deduplicate concurrent queries
     const existing = this._inflight.get(adapterId);
     if (existing) return existing;
 
@@ -86,7 +86,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
   subscribe(adapterId: string, cb: (info: QuotaInfo) => void): () => void {
     if (!this._subscribers.has(adapterId)) this._subscribers.set(adapterId, new Set());
     this._subscribers.get(adapterId)!.add(cb);
-    // 立刻推送一次缓存（不阻塞）
+    // Immediately push the cached value once (non-blocking)
     this.get(adapterId).then(cb).catch(() => {});
     return () => this._subscribers.get(adapterId)?.delete(cb);
   }
@@ -94,7 +94,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
   async recordUsage(adapterId: string, capability: string, creditsEstimated: number): Promise<void> {
     if (creditsEstimated <= 0) return;
     await this._storage.recordEstimatedUsage(adapterId, capability, creditsEstimated);
-    // 如果 adapter 无法精确查额度（unknown），基于本地估算合成 quota 并触发事件
+    // If the adapter cannot query quota precisely (unknown), synthesize quota from local estimates and emit events
     const def = this._registry.get(adapterId);
     if (def?.quota?.method.kind === 'unknown') {
       const usage = await this._storage.getEstimatedUsage();
@@ -131,7 +131,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
     return this;
   }
 
-  // ============== 内部 ==============
+  // ============== Internal ==============
   private async _fetchQuota(adapterId: string, declaration: QuotaDeclaration | undefined): Promise<QuotaInfo> {
     if (!declaration) return this._makeEstimateOnly(adapterId);
     const m = declaration.method;
@@ -200,7 +200,7 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
       try {
         const r = await sp.exec(cmd, args, { timeout: 10_000, rejectOnNonZeroExit: false });
         return { stdout: r.stdout ?? '', stderr: r.stderr ?? '', exitCode: r.exitCode ?? null };
-      } catch (e: any) { /* 降级到 native */ }
+      } catch (e: any) { /* Fall back to native */ }
     }
     return import('node:child_process').then(({ spawn }) => new Promise(resolve => {
       let stdout = '', stderr = '', done = false;
@@ -230,12 +230,12 @@ export class QuotaManagerServiceImpl implements QuotaManagerService {
     const now = Date.now();
     const lastWarn = this._lastWarningAt[adapterId] ?? 0;
     if (remaining <= 0) {
-      if (now - lastWarn > 60_000) {       // depleted 每 1 分钟最多一次
+      if (now - lastWarn > 60_000) {       // depleted at most once per 1 minute
         this._lastWarningAt[adapterId] = now;
         this._emitter.emit('quota-depleted', { adapterId, quota });
       }
     } else if (remaining <= thr) {
-      if (now - lastWarn > 10 * 60_000) {  // warning 每 10 分钟最多一次
+      if (now - lastWarn > 10 * 60_000) {  // warning at most once per 10 minutes
         this._lastWarningAt[adapterId] = now;
         this._emitter.emit('quota-warning', { adapterId, remainingPercent: remaining, quota });
       }

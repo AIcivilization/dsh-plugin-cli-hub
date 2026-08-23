@@ -1,6 +1,6 @@
 /**
- * 持久化层：复用 DSH ctx.storage.scoped（DSH 专有）。
- * 不在类型里强绑 Context.storage，而是构造时直接传入 scoped 接口。
+ * Persistence layer: reuses DSH ctx.storage.scoped (DSH-specific).
+ * Not hard-bound to Context.storage in types; instead, the scoped interface is injected directly at construction time.
  */
 import type { QuotaInfo, ScanItem } from './types';
 

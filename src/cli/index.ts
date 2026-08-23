@@ -1,20 +1,20 @@
 /**
- * DSH CLI 子命令扩展入口：dsh cli-hub ...
+ * DSH CLI sub-command extension entry: dsh cli-hub ...
  *
- * DSH 的 CLI 插件（参考 packages/cli 扩展机制）。如果 DSH 提供了
- * ctx.cli.registerSubcommand()，这里会注册；否则导出一个可以手动调用的
- * CLI 命令集合（通过 node --import 或 dsh patch 注入）。
+ * DSH CLI plugin (see the packages/cli extension mechanism). If DSH provides
+ * ctx.cli.registerSubcommand(), it is registered here; otherwise a manually
+ * invokable CLI command set is exported (injected via node --import or dsh patch).
  */
 import type { Context } from 'cordis';
 import type { ScanDepth } from '../core/types';
 
 export const name = 'dsh-plugin-cli-hub/cli';
-// 与主插件相同的设计决策：所有 ctx 属性都走 safeGet，inject 为空（永远能激活）
+// Same design decision as the main plugin: all ctx properties go through safeGet, inject is empty (can always activate)
 export const inject = [];
 
-/** 安全读取 Cordis ctx 属性：reflect.get 旁路，规避 inject 白名单检查。
- *  注：即使 reflect.get 传了 optional=false，在某些 Cordis rc 版本上仍会抛
- *  「cannot get property X without inject」——必须包两层 try/catch。
+/** Safely read a Cordis ctx property: reflect.get bypass to avoid inject allowlist checks.
+ *  Note: even with optional=false passed to reflect.get, some Cordis rc versions still throw
+ *  "cannot get property X without inject" — it must be wrapped in two layers of try/catch.
  */
 function safeGet(ctx: any, name: string): any {
   if (!ctx) return undefined;
@@ -58,11 +58,11 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
 
   const logger = typeof $logger === 'function' ? $logger('dsh-plugin-cli-hub:cli') : undefined;
 
-  // 读取顺序（按可靠性从强到弱）：
-  //  1) 主插件 mountSubPluginDirect 传的「第三实参」（不经过任何 config/对象拷贝，最稳）
-  //  2) 主插件通过 tagApply 写在 apply 函数上的 _cliHub
-  //  3) 主插件 mountSubPlugin config 传的 cfg._cliHub（以及 cfg.config._cliHub 双重包裹形式）
-  //  4) ctx.reflect 兜底
+  // Read order (from most to least reliable):
+  //  1) The "third argument" passed by the main plugin's mountSubPluginDirect (goes through no config/object copying, most reliable)
+  //  2) _cliHub written onto the apply function by the main plugin via tagApply
+  //  3) cfg._cliHub passed via the main plugin's mountSubPlugin config (plus the double-wrapped cfg.config._cliHub form)
+  //  4) ctx.reflect fallback
   const from3rd   = _cliHub3rd;
   const fromApply = (apply as any)?._cliHub;
   const fromCfgA  = (cfg as any)?._cliHub;
@@ -78,14 +78,14 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
 
   const handler = buildCliHandlers(ctx, cliHub);
 
-  // ============== 方式 A：DSH ctx.cli 原生子命令注册（若存在）==============
+  // ============== Method A: native DSH ctx.cli sub-command registration (if available) ==============
   const cliApi: any = $cli;
   if (cliApi && typeof cliApi.command === 'function') {
     registerDshCli(cliApi, handler, logger);
     return;
   }
 
-  // ============== 方式 B：独立命令模式：DSH 启动时把 cliHub.cli 挂到 ctx 供其他脚本调 ==============
+  // ============== Method B: standalone command mode: at DSH startup, mount cliHub.cli onto ctx for other scripts to call ==============
   if (typeof $set === 'function') {
     try { $set('cliHubCli', handler as any); } catch {}
   }
@@ -94,7 +94,7 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
 }
 
 function buildCliHandlers(_ctx: Context, hubArg: any = undefined) {
-  // hub：最终可用的 cliHub（调用方 apply 保证有值；这里仍保留 assert 防御）
+  // hub: the finally usable cliHub (the caller apply guarantees a value; an assert guard is kept here anyway)
   const hub = hubArg as any;
   if (!hub) {
     return {
@@ -111,7 +111,7 @@ function buildCliHandlers(_ctx: Context, hubArg: any = undefined) {
       agentStop: () => 'cliHub not available',
     } as any;
   }
-  // 工具函数：安全拿 ctx.tools（延迟获取避免 proxy trap 提前触发）
+  // Utility: safely get ctx.tools (lazy retrieval avoids triggering the proxy trap early)
   const getToolsApi = () => {
     try { return (_ctx as any).reflect?.get?.('tools', false); } catch {}
     try { return (_ctx as any).tools; } catch { return undefined; }
@@ -152,17 +152,17 @@ function buildCliHandlers(_ctx: Context, hubArg: any = undefined) {
   async function toolExec(toolName: string, inputJson: string, { json = false }: { json?: boolean } = {}) {
     const input = inputJson ? JSON.parse(inputJson) : {};
     const toolGateway = hub.tools;
-    // 用 internal execute：如果 tool 已注册进 ctx.tools，直接调；否则抛错
+    // Use internal execute: if the tool is already registered in ctx.tools, call it directly; otherwise throw
     const toolsApi: any = getToolsApi();
     if (toolsApi && typeof toolsApi.execute === 'function') {
       const r = await toolsApi.execute(toolName, input);
       return json ? JSON.stringify(r, null, 2) : JSON.stringify(r);
     }
-    // fallback：尝试从 registry 找到定义并直接 exec
+    // fallback: try to find the definition in the registry and exec directly
     throw new Error(`ctx.tools.execute not available; cannot run ${toolName}`);
   }
 
-  // ===== Agent 调试命令 =====
+  // ===== Agent debug commands =====
   async function agentSpawn(adapterId: string, { json = false }: { json?: boolean } = {}) {
     const ses = await hub.agents.spawn(adapterId);
     const info = {
@@ -234,7 +234,7 @@ function buildCliHandlers(_ctx: Context, hubArg: any = undefined) {
   async function agentSend(adapterId: string, payload: string, { json = false, timeout = 10 }: { json?: boolean; timeout?: number } = {}) {
     const ses = hub.agents.getSession(adapterId);
     if (!ses) throw new Error(`no running session: ${adapterId}`);
-    // 如果 payload 能 parse 成 JSON 就当 JSON 消息（jsonrpc 场景）；否则当纯文本行
+    // If the payload parses as JSON, treat it as a JSON message (jsonrpc scenario); otherwise as a plain text line
     let msg: any = payload;
     try { msg = JSON.parse(payload); } catch {}
     await ses.send(msg);
@@ -286,7 +286,7 @@ function registerDshCli(cliApi: any, h: ReturnType<typeof buildCliHandlers>, log
       process.stdout.write(out + '\n');
     });
 
-  // ---- Agent 子命令 ----
+  // ---- Agent sub-commands ----
   cliApi.command('cli-hub agent spawn <adapterId>', 'Start an agent session (claude-code / snow-cli)')
     .option('-j, --json')
     .action(async (id: string, opts: any) => {
@@ -346,8 +346,8 @@ function renderScanTable(r: any): string {
   return lines.join('\n');
 }
 
-// 与主插件同样原因：inject 需挂在 apply 函数对象上，兼容 loader unwrap 后读 factory.inject
-// 注意：不要挂 apply.Config（否则 Cordis resolveConfig 会尝试 Standard Schema.validate 崩）
+// Same reason as the main plugin: inject must be attached to the apply function object, compatible with the loader reading factory.inject after unwrap
+// Note: do not attach apply.Config (otherwise Cordis resolveConfig will attempt Standard Schema.validate and crash)
 (apply as any).inject = inject;
 Object.defineProperty(apply, 'displayName', { value: name, writable: false, configurable: true });
 

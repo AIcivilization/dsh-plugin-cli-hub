@@ -1,20 +1,20 @@
 /**
- * dsh-plugin-cli-hub Web UI 面板
+ * dsh-plugin-cli-hub Web UI panel
  *
- * 三条兼容路径（至少一条必生效，顺序 1 → 2 → 3 兜底）：
+ * Three compatible paths (at least one must take effect; order 1 → 2 → 3 as fallback):
  *
- *   1) ctx.settings.registerSection — DSH 设置页卡片式结构
- *   2) ctx.clientPages.register   — DSH 独立路由页（/cli-hub），server-driven 组件树
- *   3) ctx.http / ctx.router REST JSON endpoints — 任何外部前端都可 fetch；
- *      再不行还会挂 ctx.cliHub.ui 内存 API（供 CLI/其他插件代码直接调）。
+ *   1) ctx.settings.registerSection — DSH settings page card-style structure
+ *   2) ctx.clientPages.register   — DSH standalone route page (/cli-hub), server-driven component tree
+ *   3) ctx.http / ctx.router REST JSON endpoints — any external frontend can fetch;
+ *      if all else fails, the ctx.cliHub.ui in-memory API is also mounted (for direct calls from CLI / other plugin code).
  *
- * 能力：
- *   · Scanner 数据展示（最后一次扫描 + 手动重新扫描 + 进度）
- *   · Adapter 启用/禁用开关（真实回写 registry + storage + agent stop + tool unregister）
- *   · Agent 会话表 + 停止按钮
- *   · Dashboard 汇总（总数/已匹配/已启用/已认证/会话数）
+ * Capabilities:
+ *   · Scanner data display (last scan + manual rescan + progress)
+ *   · Adapter enable/disable toggles (actually writes back to registry + storage + agent stop + tool unregister)
+ *   · Agent sessions table + stop button
+ *   · Dashboard summary (total/matched/enabled/authenticated/session count)
  *
- * 不引入前端构建依赖；所有 UI 描述以 JSON 组件树返回，渲染由 DSH 负责。
+ * No frontend build dependencies; all UI descriptions are returned as JSON component trees, rendering is handled by DSH.
  */
 import type { Context } from 'cordis';
 import type {
@@ -26,14 +26,14 @@ import type {
 } from '../core/types';
 
 export const name = 'dsh-plugin-cli-hub/web';
-// 与主插件相同的设计决策：所有 ctx 属性都走 safeGet，inject 为空（永远能激活）
-// 这样纯 CLI 模式（dsh cli-hub list）下，插件不会因为缺 webServer 服务而永远 pending；
-// HTTP 路由通过 apply 内部的延迟轮询 safeGet 拿到 webServer 后再挂载，拿不到就跳过。
+// Same design decision as the main plugin: all ctx properties go through safeGet, inject is empty (always activatable)
+// This way in pure CLI mode (dsh cli hub list), the plugin won't stay pending forever due to a missing webServer service;
+// HTTP routes are mounted after apply's deferred polling via safeGet obtains webServer; skipped if unavailable.
 export const inject: string[] = [];
 
-/** 与主插件一致的安全属性读取：绕过 inject 白名单检查。
- *  注：Cordis rc 版即使 reflect.get(prop,false) 也会抛"cannot get property X without inject"
- *  ——必须全链路 try/catch，尽可能从 raw/internal 直接取。
+/** Safe property access consistent with the main plugin: bypasses the inject allowlist check.
+ *  Note: Cordis rc versions throw "cannot get property X without inject" even for reflect.get(prop,false)
+ *  — must try/catch the whole chain, prefer reading directly from raw/internal.
  */
 function safeGet(ctx: any, propName: string): any {
   if (!ctx) return undefined;
@@ -71,7 +71,7 @@ function safeGet(ctx: any, propName: string): any {
 }
 
 // ============================================================
-// UI 数据投影（纯函数，零运行时依赖/零副作用）
+// UI data projections (pure functions, zero runtime deps / zero side effects)
 // ============================================================
 export interface UiScannerRow {
   id: string;
@@ -101,8 +101,8 @@ export interface UiAdapterRow {
   capabilities: Array<'tool' | 'agent'>;
   commandNames: string[];
   enabled: boolean;
-  installed: boolean;          // registry 存在（永远 true，保留作未来扩展）
-  discovered: boolean;         // 上次 scan 是否实际发现本机有这个 CLI
+  installed: boolean;          // exists in registry (always true, kept for future extension)
+  discovered: boolean;         // whether the last scan actually discovered this CLI on this machine
   version?: string | null;
   auth?: AuthState;
   authBadge?: { label: string; color: string };
@@ -230,17 +230,17 @@ const AUTH_COLORS: Record<AuthState, string> = {
 };
 
 const AUTH_LABELS: Record<AuthState, string> = {
-  authenticated: '已登录',
-  unauthenticated: '未登录',
-  expired: '凭证过期',
-  unknown: '未知',
+  authenticated: 'Logged in',
+  unauthenticated: 'Not logged in',
+  expired: 'Credentials expired',
+  unknown: 'Unknown',
 };
 
 function authBadge(s: AuthState) {
   return { label: AUTH_LABELS[s], color: AUTH_COLORS[s] };
 }
 
-// 把 capability flags 折叠成标签数组
+// Collapse capability flags into a label array
 function capsOf(def: CliAdapterDefinition | undefined): Array<'tool' | 'agent'> {
   if (!def) return [];
   const out: Array<'tool' | 'agent'> = [];
@@ -249,7 +249,7 @@ function capsOf(def: CliAdapterDefinition | undefined): Array<'tool' | 'agent'> 
   return out;
 }
 
-// registry + lastScan → 两个表结构（Scanner 发现 表 / Adapter 清单 表）
+// registry + lastScan → two table structures (Scanner discovered table / Adapter inventory table)
 export function projectScannerRows(
   items: ScanItem[],
   opts: {
@@ -265,13 +265,13 @@ export function projectScannerRows(
     if (i.adapterId) {
       actions.push({
         id: 'toggle-adapter',
-        label: enabled ? '禁用' : '启用',
+        label: enabled ? 'Disable' : 'Enable',
         variant: enabled ? 'danger' : 'primary',
         payload: { adapterId: i.adapterId, enabled: !enabled },
       });
     }
     if (i.authState === 'unauthenticated' && def?.installHint) {
-      actions.push({ id: 'show-install-hint', label: '登录指引', variant: 'info', payload: { adapterId: def.id } });
+      actions.push({ id: 'show-install-hint', label: 'Login guide', variant: 'info', payload: { adapterId: def.id } });
     }
     return {
       id: i.adapterId ?? `cmd:${i.commandName}:${i.executablePath}`,
@@ -308,13 +308,13 @@ export function projectAdapterRows(
     const actions: UiAdapterRow['actions'] = [
       {
         id: 'toggle-adapter',
-        label: enabled ? '禁用' : '启用',
+        label: enabled ? 'Disable' : 'Enable',
         variant: enabled ? 'danger' : 'primary',
         payload: { adapterId: def.id, enabled: !enabled },
       },
     ];
     if (def.installHint && !scan) {
-      actions.push({ id: 'show-install-hint', label: '安装指引', variant: 'info', payload: { adapterId: def.id } });
+      actions.push({ id: 'show-install-hint', label: 'Install guide', variant: 'info', payload: { adapterId: def.id } });
     }
     return {
       id: def.id,
@@ -350,8 +350,8 @@ export function projectSessionRows(
     durationMs: s.durationMs,
     protocol: s.protocol,
     actions: [
-      { id: 'agent-send', label: '发消息', variant: 'default', payload: { adapterId: s.adapterId, sessionId: s.sessionId } },
-      { id: 'agent-stop', label: '停止', variant: 'danger', payload: { adapterId: s.adapterId } },
+      { id: 'agent-send', label: 'Send message', variant: 'default', payload: { adapterId: s.adapterId, sessionId: s.sessionId } },
+      { id: 'agent-stop', label: 'Stop', variant: 'danger', payload: { adapterId: s.adapterId } },
     ],
   }));
 }
@@ -396,7 +396,7 @@ export function projectToolRows(
   const rows: UiToolRow[] = [];
   for (const def of adapters) {
     const scan = byId.get(def.id);
-    // 只展示已发现且已认证的 adapter 的 tool（避免列出 CLI 没装的工具）
+    // Only show tools of discovered and authenticated adapters (avoids listing tools whose CLI isn't installed)
     if (!scan || scan.authState === 'unauthenticated' || scan.authState === 'expired') continue;
     const enabled = opts.registryEnabled(def.id);
     for (const t of def.capabilities.tools ?? []) {
@@ -494,7 +494,7 @@ export function buildDashboard(
 }
 
 // ============================================================
-// 动作派发（任何路径最终都调这里：settings action / component tree / HTTP POST / memory API）
+// Action dispatch (all paths ultimately call this: settings action / component tree / HTTP POST / memory API)
 // ============================================================
 export async function dispatchUiAction(
   ctx: Context,
@@ -507,16 +507,16 @@ export async function dispatchUiAction(
       const depth: ScanDepth = (payload?.depth as ScanDepth) ?? 'l3';
       const timeoutPerCmd: number | undefined = payload?.timeoutPerCmd;
       const result = await cliHub.scan({ depth, timeoutPerCmd });
-      // 同步更新 web 缓存，让 dashboard / adapterRows 立即拿到最新扫描结果
-      // 通过 cliHub._scanCache 共享（避免 web apply 被多次调用时不同 views 实例闭包不共享）
+      // Sync-update the web cache so dashboard / adapterRows immediately get the latest scan result
+      // Shared via cliHub._scanCache (avoids different views instance closures not sharing when web apply is called multiple times)
       try { cliHub.ui?.setCachedResult?.(result); } catch {}
       try { (cliHub as any)._scanCache = result; } catch {}
-      return { ok: true, message: `scan(${depth}) 完成, matched=${result?.summary?.matched ?? 0}/${result?.summary?.total ?? 0}`, data: result?.summary };
+      return { ok: true, message: `scan(${depth}) completed, matched=${result?.summary?.matched ?? 0}/${result?.summary?.total ?? 0}`, data: result?.summary };
     }
     case 'toggle-adapter': {
       const id: string | undefined = payload?.adapterId;
       const enabled = !!payload?.enabled;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
       enabled ? cliHub.enable(id) : cliHub.disable(id);
       return { ok: true, message: `${id} → enabled=${enabled}` };
     }
@@ -527,7 +527,7 @@ export async function dispatchUiAction(
       });
       let count = 0;
       for (const r of rows) if (r.auth === 'authenticated' && !r.enabled) { cliHub.enable(r.id); count++; }
-      return { ok: true, message: `启用了 ${count} 个已登录 adapter` };
+      return { ok: true, message: `Enabled ${count} logged-in adapters` };
     }
     case 'disable-all': {
       for (const a of cliHub.list({ onlyEnabled: true })) cliHub.disable(a.id);
@@ -535,16 +535,16 @@ export async function dispatchUiAction(
     }
     case 'agent-spawn': {
       const id: string | undefined = payload?.adapterId;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
-      if (!cliHub.agents?.spawn) return { ok: false, message: '当前 cliHub.agents 不支持 spawn' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
+      if (!cliHub.agents?.spawn) return { ok: false, message: 'cliHub.agents does not support spawn' };
       try {
         const session = await cliHub.agents.spawn(id, payload?.options);
-        return { ok: true, message: `agent 已启动: ${session?.sessionId ?? id}`, data: session };
+        return { ok: true, message: `agent started: ${session?.sessionId ?? id}`, data: session };
       } catch (e: any) { return { ok: false, message: String(e?.message ?? e) }; }
     }
     case 'agent-stop': {
       const id: string | undefined = payload?.adapterId;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
       try { await cliHub.agents.stop(id); return { ok: true }; }
       catch (e: any) { return { ok: false, message: String(e?.message ?? e) }; }
     }
@@ -556,79 +556,79 @@ export async function dispatchUiAction(
       const id: string | undefined = payload?.adapterId;
       const sessionId: string | undefined = payload?.sessionId;
       const message = payload?.message;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
-      if (message == null) return { ok: false, message: 'message 缺失' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
+      if (message == null) return { ok: false, message: 'message missing' };
       try {
-        // 优先用 cliHub.agents.getSession(adapterId) 拿到完整 AgentSession（含 send 方法）
-        // listSessions 返回的是简化投影对象（无 send 方法），不能直接用
+        // Prefer cliHub.agents.getSession(adapterId) to get the full AgentSession (with send method)
+        // listSessions returns simplified projection objects (no send method), cannot be used directly
         const session = cliHub.agents?.getSession?.(id);
         if (session && typeof session.send === 'function') {
           await session.send(message);
-          return { ok: true, message: `消息已发送到 session ${session.sessionId}` };
+          return { ok: true, message: `Message sent to session ${session.sessionId}` };
         }
-        // fallback：尝试用 sessionId 在 listSessions 中匹配再尝试 send
+        // fallback: try matching sessionId in listSessions then attempt send
         if (sessionId) {
           const listed = (cliHub.agents?.listSessions?.() ?? []).find((s: any) => s.sessionId === sessionId);
           if (listed && typeof (listed as any).send === 'function') {
             await (listed as any).send(message);
-            return { ok: true, message: `消息已发送到 session ${listed.sessionId}` };
+            return { ok: true, message: `Message sent to session ${listed.sessionId}` };
           }
         }
-        // 最终 fallback：直接调 cliHub.agents.send(adapterId, msg) 如果存在
+        // Final fallback: call cliHub.agents.send(adapterId, msg) directly if it exists
         if (typeof cliHub.agents?.send === 'function') {
           await cliHub.agents.send(id, message);
           return { ok: true };
         }
-        return { ok: false, message: '没有可用的 session.send 或 cliHub.agents.send 方法' };
+        return { ok: false, message: 'No available session.send or cliHub.agents.send method' };
       } catch (e: any) { return { ok: false, message: String(e?.message ?? e) }; }
     }
     case 'quota-refresh': {
       const id: string | undefined = payload?.adapterId;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
-      if (!cliHub.quota?.refresh) return { ok: false, message: '当前 cliHub.quota 不支持 refresh' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
+      if (!cliHub.quota?.refresh) return { ok: false, message: 'cliHub.quota does not support refresh' };
       try {
         const q = await cliHub.quota.refresh(id);
-        return { ok: true, message: `额度刷新完成: ${id}`, data: q };
+        return { ok: true, message: `Quota refresh completed: ${id}`, data: q };
       } catch (e: any) { return { ok: false, message: String(e?.message ?? e) }; }
     }
     case 'quota-refresh-all': {
       if (!cliHub.quota?.refreshAll) {
-        // 退化：对每个已启用的 adapter 分别 refresh
+        // Degrade: refresh each enabled adapter individually
         const ids = (cliHub.list?.({ onlyEnabled: true }) ?? []).map((a: any) => a.id);
         const results: any[] = [];
         for (const id of ids) {
           try { if (cliHub.quota?.refresh) results.push(await cliHub.quota.refresh(id)); }
           catch (e: any) { results.push({ adapterId: id, error: String(e?.message ?? e) }); }
         }
-        return { ok: true, message: `刷新 ${results.length} 个 adapter 额度`, data: results };
+        return { ok: true, message: `Refreshed quota for ${results.length} adapters`, data: results };
       }
       try {
         const results = await cliHub.quota.refreshAll();
-        return { ok: true, message: '全部额度刷新完成', data: results };
+        return { ok: true, message: 'All quotas refreshed', data: results };
       } catch (e: any) { return { ok: false, message: String(e?.message ?? e) }; }
     }
     case 'tool-exec': {
       const toolName: string | undefined = payload?.toolName;
       const input: any = payload?.input ?? {};
-      if (!toolName) return { ok: false, message: 'toolName 缺失' };
-      if (!cliHub.tools?.execute) return { ok: false, message: '当前 cliHub.tools 不支持 execute' };
+      if (!toolName) return { ok: false, message: 'toolName missing' };
+      if (!cliHub.tools?.execute) return { ok: false, message: 'cliHub.tools does not support execute' };
       try {
         const result = await cliHub.tools.execute(toolName, input);
-        return { ok: true, message: `tool ${toolName} 执行完成`, data: result };
+        return { ok: true, message: `tool ${toolName} execution completed`, data: result };
       } catch (e: any) { return { ok: false, message: String(e?.message ?? e) }; }
     }
     case 'show-install-hint': {
       const id: string | undefined = payload?.adapterId;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
       const def = cliHub.registry?.get?.(id);
-      if (!def?.installHint) return { ok: false, message: '无安装指引' };
+      if (!def?.installHint) return { ok: false, message: 'No install hint' };
       return { ok: true, message: def.installHint, data: { installHint: def.installHint, officialDoc: def.officialDoc } };
     }
     case 'adapter-detail': {
       const id: string | undefined = payload?.adapterId;
-      if (!id) return { ok: false, message: 'adapterId 缺失' };
+      if (!id) return { ok: false, message: 'adapterId missing' };
       const def = cliHub.registry?.get?.(id);
-      if (!def) return { ok: false, message: `未找到 adapter: ${id}` };
+      if (!def) return { ok: false, message: `Adapter not found: ${id}` };
       const scanItems = (await getLastScan(cliHub)) ?? [];
       const scan = scanItems.find((s: any) => s.adapterId === id) ?? null;
       let quota: any = null;
@@ -638,16 +638,16 @@ export async function dispatchUiAction(
         scan,
         quota,
       });
-      return { ok: true, message: `adapter 详情: ${id}`, data: detail };
+      return { ok: true, message: `Adapter details: ${id}`, data: detail };
     }
     default:
-      return { ok: false, message: `未知动作: ${actionId}` };
+      return { ok: false, message: `Unknown action: ${actionId}` };
   }
 }
 
 async function getLastScan(cliHub: any): Promise<ScanItem[] | null> {
   try {
-    // 先尝试 storage.loadLastScan（内存快路径），没的话用 cliHub.scan cached
+    // Try storage.loadLastScan first (fast in-memory path); if unavailable, use cliHub.scan cached
     const last = await (cliHub as any).scanner?._lastScan
       ?? (await (cliHub as any).storage?.loadLastScan?.())
       ?? null;
@@ -658,7 +658,7 @@ async function getLastScan(cliHub: any): Promise<ScanItem[] | null> {
 }
 
 // ============================================================
-// 视图函数（供 settings/clientPages/HTTP 共用）
+// View functions (shared by settings/clientPages/HTTP)
 // ============================================================
 interface UiViews {
   getLastScanOrCached: () => Promise<ScanResult | null>;
@@ -683,10 +683,10 @@ function createViews(ctx: Context, cliHub: any): UiViews {
   }
 
   let lastCachedResult: ScanResult | null = null;
-  // 把缓存挂到 cliHub 上，避免 web apply 被多次调用时不同 views 实例的闭包不共享
+  // Attach the cache to cliHub to avoid different views instance closures not sharing when web apply is called multiple times
   if (!(cliHub as any)._scanCache) (cliHub as any)._scanCache = null;
   const getLastScanOrCached: UiViews['getLastScanOrCached'] = async () => {
-    // 优先读 cliHub._scanCache（跨 views 实例共享），fallback 到本闭包的 lastCachedResult
+    // Read cliHub._scanCache first (shared across views instances), fallback to this closure's lastCachedResult
     const shared = (cliHub as any)._scanCache;
     if (shared) return shared;
     if (lastCachedResult) return lastCachedResult;
@@ -714,7 +714,7 @@ function createViews(ctx: Context, cliHub: any): UiViews {
 
   async function getQuotaFor(adapterId: string): Promise<any | null> {
     try {
-      // 多种 API 形态兼容：cliHub.quota.get(id) / cliHub.quota.snapshot(id) / cache 查询
+      // Compatible with multiple API shapes: cliHub.quota.get(id) / cliHub.quota.snapshot(id) / cache lookup
       if (cliHub.quota?.get) return await cliHub.quota.get(adapterId);
       if (cliHub.quota?.snapshot) return await cliHub.quota.snapshot(adapterId);
       if (cliHub.quota?.cache?.get) return cliHub.quota.cache.get(adapterId);
@@ -774,10 +774,10 @@ function createViews(ctx: Context, cliHub: any): UiViews {
 }
 
 // ============================================================
-// Settings 路径 A
+// Settings path A
 // ============================================================
 function mountSettingsPath(ctx: Context, cliHub: any, views: UiViews, log: any, settings?: any): boolean {
-  // 参数优先（来自 safeGet），兜底也通过 safeGet 读一次（保持单测时 headless 环境的 ctx.settings 直读仍可用）
+  // Parameter takes priority (from safeGet); fallback also reads once via safeGet (keeps direct ctx.settings reads working in headless environments during unit tests)
   const $settings = settings ?? (() => { try { return safeGet(ctx, 'settings'); } catch { return undefined; } })();
   if (!$settings || typeof $settings.registerSection !== 'function') return false;
   try {
@@ -785,38 +785,38 @@ function mountSettingsPath(ctx: Context, cliHub: any, views: UiViews, log: any, 
       id: 'cli-hub',
       title: 'CLI Hub',
       icon: 'terminal',
-      // settings 协议如果支持 onAction 回调就直接走派发
+      // If the settings protocol supports the onAction callback, dispatch directly
       onAction:
         $settings._supportsOnAction !== false
           ? async (actionId: string, payload: any) => dispatchUiAction(ctx, cliHub, actionId, payload)
           : undefined,
       render: () => ({
         sections: [
-          // --- Dashboard 摘要 ---
+          // --- Dashboard summary ---
           {
-            title: '概览',
-            description: '本机 AI CLI 接入与额度消耗统计',
+            title: 'Overview',
+            description: 'Local AI CLI integration and quota usage statistics',
             headerActions: [
-              { id: 'scan', label: '快速扫描(L1)', variant: 'default', payload: { depth: 'l1' } },
-              { id: 'quota-refresh-all', label: '刷新全部额度', variant: 'primary' },
+              { id: 'scan', label: 'Quick scan (L1)', variant: 'default', payload: { depth: 'l1' } },
+              { id: 'quota-refresh-all', label: 'Refresh all quotas', variant: 'primary' },
             ],
             refresh: async () => views.getDashboard(),
           },
-          // --- Scanner 发现 ---
+          // --- Scanner discovered ---
           {
-            title: '已发现的 AI CLI',
-            description: 'L3 扫描会调用各 CLI 的 auth status 校验登录态（网络请求，~数秒）。',
+            title: 'Discovered AI CLIs',
+            description: 'L3 scan invokes the auth status of each CLI to verify login state (network requests, ~several seconds).',
             headerActions: [
-              { id: 'scan', label: '重新扫描(L3)', variant: 'primary', payload: { depth: 'l3' } },
-              { id: 'scan', label: '快速扫描(L1)', variant: 'default', payload: { depth: 'l1' } },
+              { id: 'scan', label: 'Rescan (L3)', variant: 'primary', payload: { depth: 'l3' } },
+              { id: 'scan', label: 'Quick scan (L1)', variant: 'default', payload: { depth: 'l1' } },
             ],
             columns: [
-              { key: 'displayName', label: '名称' },
-              { key: 'version', label: '版本' },
-              { key: 'authBadge', label: '登录' },
-              { key: 'capabilities', label: '能力' },
-              { key: 'enabled', label: '启用' },
-              { key: 'executablePath', label: '安装路径' },
+              { key: 'displayName', label: 'Name' },
+              { key: 'version', label: 'Version' },
+              { key: 'authBadge', label: 'Login' },
+              { key: 'capabilities', label: 'Capabilities' },
+              { key: 'enabled', label: 'Enabled' },
+              { key: 'executablePath', label: 'Install path' },
             ],
             refresh: async (payload: any) => {
               const depth: ScanDepth = (payload?.depth as ScanDepth) ?? 'l3';
@@ -824,64 +824,64 @@ function mountSettingsPath(ctx: Context, cliHub: any, views: UiViews, log: any, 
               return views.getScannerRows(depth, timeoutPerCmd);
             },
           },
-          // --- Adapter 清单（含未安装） ---
+          // --- Adapter inventory (including not installed) ---
           {
-            title: 'Adapter 开关（全部内置）',
-            description: '禁用会同步停止正在跑的 Agent 子进程并从 DSH 工具表注销该 CLI 的工具。点"详情"展开 adapter 完整信息。',
+            title: 'Adapter toggles (all built-in)',
+            description: 'Disabling also stops running Agent subprocesses and unregisters the tools of that CLI from the DSH tool table. Click "Details" to expand full adapter info.',
             headerActions: [
-              { id: 'enable-all-authed', label: '启用全部已登录', variant: 'primary' },
-              { id: 'disable-all', label: '禁用全部', variant: 'danger' },
+              { id: 'enable-all-authed', label: 'Enable all logged-in', variant: 'primary' },
+              { id: 'disable-all', label: 'Disable all', variant: 'danger' },
             ],
             columns: [
-              { key: 'name', label: '适配器' },
-              { key: 'discovered', label: '已安装' },
-              { key: 'version', label: '探测版本' },
-              { key: 'authBadge', label: '登录' },
-              { key: 'capabilities', label: '能力' },
-              { key: 'enabled', label: '启用' },
+              { key: 'name', label: 'Adapter' },
+              { key: 'discovered', label: 'Installed' },
+              { key: 'version', label: 'Detected version' },
+              { key: 'authBadge', label: 'Login' },
+              { key: 'capabilities', label: 'Capabilities' },
+              { key: 'enabled', label: 'Enabled' },
             ],
             refresh: async () => views.getAdapterRows(),
           },
-          // --- 额度监控 ---
+          // --- Quota monitoring ---
           {
-            title: '额度监控',
-            description: '每个已启用 adapter 的额度使用情况。点"刷新"重新拉取（会调 CLI 或 HTTP）。',
+            title: 'Quota monitoring',
+            description: 'Quota usage of each enabled adapter. Click "Refresh" to re-fetch (calls the CLI or HTTP).',
             headerActions: [
-              { id: 'quota-refresh-all', label: '刷新全部额度', variant: 'primary' },
+              { id: 'quota-refresh-all', label: 'Refresh all quotas', variant: 'primary' },
             ],
             columns: [
-              { key: 'adapterName', label: '适配器' },
-              { key: 'used', label: '已用' },
-              { key: 'total', label: '总额度' },
-              { key: 'percent', label: '使用率(%)' },
-              { key: 'currency', label: '单位' },
-              { key: 'refreshedAt', label: '刷新时间' },
+              { key: 'adapterName', label: 'Adapter' },
+              { key: 'used', label: 'Used' },
+              { key: 'total', label: 'Total quota' },
+              { key: 'percent', label: 'Usage (%)' },
+              { key: 'currency', label: 'Unit' },
+              { key: 'refreshedAt', label: 'Refreshed at' },
             ],
             refresh: async () => views.getQuotaRows(),
           },
-          // --- 工具清单（已发现 + 已认证的 CLI 工具）---
+          // --- Tool list (discovered + authenticated CLI tools) ---
           {
-            title: '可用工具',
-            description: '已发现且已认证的 CLI 暴露给 DSH agent 的工具清单。点"执行"测试工具调用。',
+            title: 'Available tools',
+            description: 'Tools that discovered and authenticated CLIs expose to the DSH agent. Click "Execute" to test a tool call.',
             columns: [
-              { key: 'toolName', label: '工具名' },
-              { key: 'adapterName', label: '来源' },
-              { key: 'description', label: '说明' },
-              { key: 'estimatedCredits', label: '预估额度' },
-              { key: 'enabled', label: '启用' },
+              { key: 'toolName', label: 'Tool name' },
+              { key: 'adapterName', label: 'Source' },
+              { key: 'description', label: 'Description' },
+              { key: 'estimatedCredits', label: 'Estimated credits' },
+              { key: 'enabled', label: 'Enabled' },
             ],
             refresh: async () => views.getToolRows(),
           },
-          // --- Agent 会话 ---
+          // --- Agent sessions ---
           {
-            title: 'Agent 会话',
-            description: '长连接子 Agent 进程；点"停止"走优雅关机（SIGINT → grace → SIGKILL）。',
-            headerActions: [{ id: 'agent-stop-all', label: '停止全部', variant: 'danger' }],
+            title: 'Agent sessions',
+            description: 'Long-lived sub-Agent processes; click "Stop" for graceful shutdown (SIGINT → grace → SIGKILL).',
+            headerActions: [{ id: 'agent-stop-all', label: 'Stop all', variant: 'danger' }],
             columns: [
-              { key: 'adapterName', label: '适配器' },
+              { key: 'adapterName', label: 'Adapter' },
               { key: 'pid', label: 'PID' },
-              { key: 'status', label: '状态' },
-              { key: 'durationMs', label: '运行时长(ms)' },
+              { key: 'status', label: 'Status' },
+              { key: 'durationMs', label: 'Uptime (ms)' },
             ],
             refresh: async () => views.getSessionRows(),
           },
@@ -897,18 +897,18 @@ function mountSettingsPath(ctx: Context, cliHub: any, views: UiViews, log: any, 
 }
 
 // ============================================================
-// ClientPages 路径 B
+// ClientPages path B
 // ============================================================
 function mountClientPagesPath(ctx: Context, cliHub: any, views: UiViews, log: any, clientPages?: any): boolean {
   const $clientPages = clientPages ?? (() => { try { return safeGet(ctx, 'clientPages'); } catch { return undefined; } })();
   if (!$clientPages || typeof $clientPages.register !== 'function') return false;
   try {
-    // DSH 真实协议未知；我们采用"server-driven 组件树"描述，并挂 action dispatcher
-    // 如果 DSH runtime 不接受 componentTree 字段，回落到 placeholder 但 panel.meta 提供 HTTP API 入口
+    // The real DSH protocol is unknown; we use a "server-driven component tree" description and attach an action dispatcher
+    // If the DSH runtime does not accept the componentTree field, fall back to placeholder but panel.meta provides the HTTP API entry
     const panel = {
       kind: 'component-tree',
       meta: {
-        description: 'CLI Hub Dashboard + Scanner 表 + Adapter 开关 + 额度监控 + 工具清单 + Agent 会话',
+        description: 'CLI Hub Dashboard + Scanner table + Adapter toggles + quota monitoring + tool list + Agent sessions',
         restFallback: {
           dashboard: '/plugins/cli-hub/api/dashboard',
           adapters: '/plugins/cli-hub/api/adapters',
@@ -935,14 +935,14 @@ function mountClientPagesPath(ctx: Context, cliHub: any, views: UiViews, log: an
           route: '/cli-hub',
           children: [
             { type: 'dashboard', data: dashboard, actions: [
-              { id: 'scan', label: '重新扫描', variant: 'primary', payload: { depth: 'l3' } },
-              { id: 'quota-refresh-all', label: '刷新全部额度', variant: 'default' },
+              { id: 'scan', label: 'Rescan', variant: 'primary', payload: { depth: 'l3' } },
+              { id: 'quota-refresh-all', label: 'Refresh all quotas', variant: 'default' },
             ] },
-            { type: 'table', title: '已发现 CLI', columns: rows.length ? Object.keys(rows[0]).filter(k => k !== 'actions') : [], rows, rowActions: 'actions' },
-            { type: 'table', title: 'Adapter 开关', columns: adapters.length ? Object.keys(adapters[0]).filter(k => k !== 'actions') : [], rows: adapters, rowActions: 'actions', expandable: { actionId: 'adapter-detail', keyField: 'id' } },
-            { type: 'table', title: '额度监控', columns: quota.length ? Object.keys(quota[0]) : [], rows: quota, rowActions: [{ id: 'quota-refresh', label: '刷新', variant: 'default', payloadKey: 'adapterId' }] },
-            { type: 'table', title: '可用工具', columns: tools.length ? Object.keys(tools[0]).filter(k => k !== 'inputSchema') : [], rows: tools, rowActions: [{ id: 'tool-exec', label: '执行', variant: 'primary', payloadKey: 'toolName' }] },
-            { type: 'table', title: 'Agent 会话', columns: sessions.length ? Object.keys(sessions[0]).filter(k => k !== 'actions') : [], rows: sessions, rowActions: 'actions' },
+            { type: 'table', title: 'Discovered CLIs', columns: rows.length ? Object.keys(rows[0]).filter(k => k !== 'actions') : [], rows, rowActions: 'actions' },
+            { type: 'table', title: 'Adapter toggles', columns: adapters.length ? Object.keys(adapters[0]).filter(k => k !== 'actions') : [], rows: adapters, rowActions: 'actions', expandable: { actionId: 'adapter-detail', keyField: 'id' } },
+            { type: 'table', title: 'Quota monitoring', columns: quota.length ? Object.keys(quota[0]) : [], rows: quota, rowActions: [{ id: 'quota-refresh', label: 'Refresh', variant: 'default', payloadKey: 'adapterId' }] },
+            { type: 'table', title: 'Available tools', columns: tools.length ? Object.keys(tools[0]).filter(k => k !== 'inputSchema') : [], rows: tools, rowActions: [{ id: 'tool-exec', label: 'Execute', variant: 'primary', payloadKey: 'toolName' }] },
+            { type: 'table', title: 'Agent sessions', columns: sessions.length ? Object.keys(sessions[0]).filter(k => k !== 'actions') : [], rows: sessions, rowActions: 'actions' },
           ],
         };
       },
@@ -963,10 +963,10 @@ function mountClientPagesPath(ctx: Context, cliHub: any, views: UiViews, log: an
 }
 
 // ============================================================
-// HTTP 降级路径 C（ctx.webServer / ctx.http / ctx.router）
-// DSH 官方使用 `@deepseek-ai/dsh-host-webserver` 的 `webServer` service，
-// 协议是：webServer.register({ kind: "exact" | "prefix", path, method?, handler(req,res) })。
-// 如果没拿到 webServer（测试/旧版本 DSH），再回退到 ctx.http / ctx.router 风格。
+// HTTP fallback path C (ctx.webServer / ctx.http / ctx.router)
+// DSH officially uses the `webServer` service of `@deepseek-ai/dsh-host-webserver`,
+// with the protocol: webServer.register({ kind: "exact" | "prefix", path, method?, handler(req,res) }).
+// If webServer is unavailable (tests / older DSH), fall back to ctx.http / ctx.router style.
 // ============================================================
 function mountHttpPath(
   ctx: Context,
@@ -981,7 +981,7 @@ function mountHttpPath(
   const $router = router ?? (() => { try { return safeGet(ctx, 'router'); } catch { return undefined; } })();
   const $webServer = webServer ?? (() => { try { return safeGet(ctx, 'webServer'); } catch { return undefined; } })();
 
-  // 方法路由包装：如果 route 没声明 method，需要在 handler 内过滤
+  // Method route wrapper: if the route does not declare a method, filter inside the handler
   const withMethod = (method: 'GET' | 'POST', handler: (req: any, res: any) => any) =>
     (req: any, res: any) => {
       const m = (req?.method ?? 'GET').toUpperCase();
@@ -996,7 +996,7 @@ function mountHttpPath(
       return handler(req, res);
     };
 
-  // ------- 方式 1：DSH webServer.register（优先） -------
+  // ------- Approach 1: DSH webServer.register (preferred) -------
   if ($webServer && typeof $webServer.register === 'function') {
     const reg = (kind: 'exact' | 'prefix', method: 'GET' | 'POST', path: string, handler: (r: any, s: any) => any) => {
       try {
@@ -1016,7 +1016,7 @@ function mountHttpPath(
     const routes = [
       reg('prefix', 'GET', '/plugins/cli-hub/api/dashboard', async (req, res) => send(res, 200, await views.getDashboard())),
       reg('prefix', 'GET', '/cli-hub/api/dashboard', async (req, res) => send(res, 200, await views.getDashboard())),
-      // adapters list + detail 合并为单个 prefix 路由（避免 duplicate path 抛错）：
+      // adapters list + detail merged into a single prefix route (avoids duplicate path errors):
       //   GET /cli-hub/api/adapters            → list
       //   GET /cli-hub/api/adapters/<id>       → detail
       //   GET /cli-hub/api/adapters/<id>/quota → refresh quota for adapter
@@ -1120,7 +1120,7 @@ function mountHttpPath(
     }
   }
 
-  // ------- 方式 2：$http.get / $router.get 等（如果 DSH 用其他 server 插件） -------
+  // ------- Approach 2: $http.get / $router.get etc. (if DSH uses another server plugin) -------
   const registerOldStyle = (method: 'get' | 'post', route: string, handler: (req: any, res?: any) => any) => {
     const tryTargets: Array<[obj: any, fnName: string, argsMapper: (r: any) => [string, any]]> = [
       [$http, method.toLowerCase(), (h) => [route, h]],
@@ -1225,13 +1225,13 @@ function mountHttpPath(
     return true;
   }
   if (routesOk.some(Boolean)) {
-    log?.debug?.('registered partial HTTP API (部分前缀)');
+    log?.debug?.('registered partial HTTP API (some prefixes)');
     return true;
   }
   return false;
 }
 
-/** 通用 JSON 响应发送：兼容 Express/Koa/原生 http 响应风格。 */
+/** Generic JSON response sender: compatible with Express/Koa/native http response styles. */
 function send(res: any, code: number, json: any) {
   const payload = JSON.stringify(json);
   if (res && typeof res === 'object') {
@@ -1244,7 +1244,7 @@ function send(res: any, code: number, json: any) {
   return json;
 }
 
-/** 从 node:http IncomingMessage 里解析 query string（webServer 协议不走 Koa query）。 */
+/** Parse query string from a node:http IncomingMessage (the webServer protocol does not go through Koa query). */
 function parseQueryFromUrl(rawUrl: string): Record<string, string> {
   try {
     const u = new URL(rawUrl, 'http://x');
@@ -1254,20 +1254,20 @@ function parseQueryFromUrl(rawUrl: string): Record<string, string> {
   } catch { return {}; }
 }
 
-/** 从 url 中提取 /adapters/<id> 的 id 部分（兼容 ? 后的 query）。 */
+/** Extract the id part of /adapters/<id> from a url (tolerates a query after ?). */
 function extractAdapterIdFromUrl(rawUrl: string, marker: string): string | null {
   try {
     const pathOnly = rawUrl.split('?')[0];
     const idx = pathOnly.indexOf(marker);
     if (idx < 0) return null;
     const after = pathOnly.slice(idx + marker.length);
-    // after 形如 "<id>" 或 "<id>/quota"
+    // after looks like "<id>" or "<id>/quota"
     const segments = after.split('/').filter(Boolean);
     return segments[0] ?? null;
   } catch { return null; }
 }
 
-/** 从 IncomingMessage 读取 JSON body（DSH webServer 不自动 body parse）。 */
+/** Read JSON body from an IncomingMessage (DSH webServer does not auto-parse the body). */
 async function readJsonBody(req: any): Promise<any> {
   try {
     if (req?.body !== null && req?.body !== undefined) return req.body;
@@ -1281,15 +1281,15 @@ async function readJsonBody(req: any): Promise<any> {
 }
 
 /**
- * SSE 长连接：把 cliHub 的 progress ring + cliHub.on 事件流式推送给前端。
- * 协议：Content-Type: text/event-stream，每条消息 `data: <json>\n\n`。
- * 保持连接 5 分钟自动断开（前端可重连），期间 cliHub.emit 的事件会被
- * subscribeEvents 推入 progressRing，由本函数 drain 推送。
+ * SSE long connection: streams the cliHub progress ring + cliHub.on events to the frontend.
+ * Protocol: Content-Type: text/event-stream, each message `data: <json>\n\n`.
+ * The connection auto-disconnects after 5 minutes (the frontend can reconnect); during that time
+ * events emitted by cliHub are pushed into progressRing by subscribeEvents and drained/pushed by this function.
  */
 async function handleSse(req: any, res: any, cliHub: any, log: any) {
-  // 只支持原生 IncomingMessage 风格（res.writeHead + res.write）
+  // Only supports native IncomingMessage style (res.writeHead + res.write)
   if (!res || typeof res.writeHead !== 'function' || typeof res.write !== 'function') {
-    // Koa 风格降级：返回一次性 drain 的 JSON（非流）
+    // Koa-style fallback: return a one-shot drained JSON (non-streaming)
     const events = cliHub?.ui?.drainEvents?.() ?? [];
     return send(res, 200, { events, note: 'SSE not supported on this server shape; returning buffered events' });
   }
@@ -1302,7 +1302,7 @@ async function handleSse(req: any, res: any, cliHub: any, log: any) {
     });
     res.write(`data: ${JSON.stringify({ type: 'connected', ts: Date.now() })}\n\n`);
 
-    // 借助 cliHub.ui 内存 API 的 drainEvents 作为事件源；如果没有则降级到心跳
+    // Use drainEvents from the cliHub.ui in-memory API as the event source; if absent, degrade to a heartbeat
     const drain = () => {
       try {
         const events = cliHub?.ui?.drainEvents?.() ?? [];
@@ -1314,14 +1314,14 @@ async function handleSse(req: any, res: any, cliHub: any, log: any) {
       }
     };
     const drainTimer: any = setInterval(drain, 1000);
-    // 5 分钟超时自动断开（前端可重连）
+    // Auto-disconnect after 5-minute timeout (frontend can reconnect)
     const maxAgeTimer: any = setTimeout(() => {
       try { res.write(`data: ${JSON.stringify({ type: 'close', reason: 'max-age' })}\n\n`); } catch {}
       try { clearInterval(drainTimer); } catch {}
       try { res.end(); } catch {}
     }, 5 * 60 * 1000);
 
-    // 客户端断开清理
+    // Cleanup on client disconnect
     const cleanup = () => {
       try { clearInterval(drainTimer); } catch {}
       try { clearTimeout(maxAgeTimer); } catch {}
@@ -1341,7 +1341,7 @@ async function handleSse(req: any, res: any, cliHub: any, log: any) {
 }
 
 // ============================================================
-// 事件订阅 + 内存 API 兜底
+// Event subscription + in-memory API fallback
 // ============================================================
 function subscribeEvents(
   ctx: Context,
@@ -1363,7 +1363,7 @@ function subscribeEvents(
   on('cli-hub/agent-spawned', (p) => progressRing.push({ type: 'agent-spawned', ts: Date.now(), data: p }));
   on('cli-hub/agent-shutdown', (p) => progressRing.push({ type: 'agent-shutdown', ts: Date.now(), data: p }));
   on('cli-hub/quota-warning', (p) => progressRing.push({ type: 'quota-warning', ts: Date.now(), data: p }));
-  // UI action 总线（settings 协议没有 onAction 时，前端可以 emit 这个事件触发动作）
+  // UI action bus (when the settings protocol has no onAction, the frontend can emit this event to trigger actions)
   on('cli-hub/ui-action', async ({ id, payload }: any) => {
     try { await dispatchUiAction(ctx, cliHub, id, payload); }
     catch (e: any) { log?.warn?.('ui-action dispatch failed:', e?.message ?? e); }
@@ -1380,14 +1380,14 @@ function createMemoryUiApi(cliHub: any, views: UiViews & { setCachedResult?: (r:
     getQuotaRows: () => views.getQuotaRows(),
     getToolRows: () => views.getToolRows(),
     dispatch: (id: string, payload?: any) => dispatchUiAction(ctx, cliHub, id, payload),
-    /** 同步更新 views 的 scan 缓存（scan action 调用后让 dashboard 立即拿到最新结果） */
+    /** Sync-update the views scan cache (lets the dashboard get the latest result immediately after a scan action call) */
     setCachedResult: (r: ScanResult | null) => views.setCachedResult?.(r),
-    /** 事件 ring buffer：自上次 drain 之后的所有事件（ui 轮询） */
+    /** Event ring buffer: all events since the last drain (for ui polling) */
     drainEvents: () => progressRing.drain(),
   };
 }
 
-// 简易 ring buffer（最多 50 条，drain 一次清空）
+// Simple ring buffer (max 50 entries, drain clears all)
 function makeRing(size = 50) {
   const buf: any[] = [];
   return {
@@ -1397,11 +1397,11 @@ function makeRing(size = 50) {
 }
 
 // ============================================================
-// apply 入口
+// apply entry
 // ============================================================
 export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = undefined) {
-  // inject=[]：fiber 立刻激活（不依赖 webServer 服务），HTTP 路由通过延迟轮询 safeGet 拿到 webServer 后再挂载。
-  // 这样纯 CLI 模式（dsh cli-hub list 等）下插件不会因为缺 webServer 而 pending。
+  // inject=[]: fiber activates immediately (no dependency on the webServer service); HTTP routes are mounted after deferred polling via safeGet obtains webServer.
+  // This way in pure CLI mode (dsh cli-hub list etc.) the plugin won't stay pending due to a missing webServer.
   const $logger      = safeGet(ctx, 'logger');
   const $settings    = safeGet(ctx, 'settings');
   const $clientPages = safeGet(ctx, 'clientPages');
@@ -1419,11 +1419,11 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
     error: (...a: any[]) => console.error('[cli-hub/web]', ...a),
   } as any;
 
-  // 挂载优先级（按可靠性从强到弱）：
-  //   1) 主插件 mountSubPluginDirect 传的「第三实参」（不经过任何 config/对象拷贝，最稳）
-  //   2) 主插件通过 tagApply 写在 apply 函数上的 _cliHub
-  //   3) 主插件 mountSubPlugin config 传的 cfg._cliHub / cfg.config._cliHub
-  //   4) safeGet(ctx,'cliHub')（reflect.provide effect 之后才可见，一般仅 UI 路由延迟回调）
+  // Mount priority (strongest to weakest reliability):
+  //   1) The third argument passed by the main plugin's mountSubPluginDirect (no config/object copying, most reliable)
+  //   2) _cliHub written onto the apply function by the main plugin via tagApply
+  //   3) cfg._cliHub / cfg.config._cliHub passed via the main plugin's mountSubPlugin config
+  //   4) safeGet(ctx,'cliHub') (only visible after the reflect.provide effect, generally only in deferred UI route callbacks)
   const from3rd   = _cliHub3rd;
   const fromApply = (apply as any)?._cliHub;
   const fromCfgA  = (cfg as any)?._cliHub;
@@ -1431,13 +1431,13 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
   const fromCtx   = safeGet(ctx, 'cliHub');
   const cliHub: any = from3rd ?? fromApply ?? fromCfgA ?? fromCfgB ?? fromCtx;
 
-  // ------ DSH ctx 诊断：收集所有 top-level key 名 + runtime services 名 ------
+  // ------ DSH ctx diagnostics: collect all top-level key names + runtime service names ------
   let ctxKeys: string[] = [];
   let svcKeys: string[] = [];
   let runtimeServicesEntries: Record<string, string> = {};
   let safeGetProbe: Record<string, string> = {};
   try {
-    // 路径 A：多种 ctx 形态下的 ownKeys
+    // Path A: ownKeys across multiple ctx shapes
     const candidates = [
       ctx as any,
       (ctx as any)?.internal,
@@ -1468,7 +1468,7 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
       } catch {}
       if (keys.length) {
         ctxKeys = Array.from(new Set([...ctxKeys, ...keys])).slice(0, 200);
-        // 记录本对象中 server-like 字段
+        // Record server-like fields on this object
         for (const k of keys) {
           if (/server|http|router|web|app|koa|listen|port/i.test(k)) {
             const prefix = c === (ctx as any) ? 'ctx' :
@@ -1488,7 +1488,7 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
       }
     }
 
-    // 路径 B：reflect.keys（可能叫 keys/list/entries，多试几个名字）
+    // Path B: reflect.keys (may be named keys/list/entries, try several names)
     try {
       const refAny = (ctx as any).reflect;
       if (refAny && typeof refAny === 'object') {
@@ -1503,7 +1503,7 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
       }
     } catch {}
 
-    // 路径 C：用 safeGet 主动探测常见 web server 候选名（忽略大小写差异）
+    // Path C: actively probe common web server candidate names via safeGet (case-insensitive)
     const CANDIDATES = [
       'webServer','webserver','web_server','WebServer',
       'server','Server','httpServer','httpserver','HTTPserver',
@@ -1519,19 +1519,19 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
 
   const views = createViews(ctx, cliHub);
   const progressRing = makeRing(50);
-  // 通过闭包注入 $on / $addEventListener（subscribeEvents 内部之前读 anyCtx.on）
+  // Inject $on / $addEventListener via closure (subscribeEvents previously read anyCtx.on internally)
   subscribeEvents(ctx, cliHub, progressRing, log, { $on, $addEventListener });
 
   const mounted: Array<readonly [string, boolean]> = [];
   const doMount = () => {
-    // settings / clientPages：非轮询，第一次有就装
+    // settings / clientPages: no polling, mount on first availability
     if (!mounted.find(([k]) => k === 'settings') && $settings) {
       mounted.push(['settings', mountSettingsPath(ctx, cliHub, views, log, $settings)] as const);
     }
     if (!mounted.find(([k]) => k === 'clientPages') && $clientPages) {
       mounted.push(['clientPages', mountClientPagesPath(ctx, cliHub, views, log, $clientPages)] as const);
     }
-    // HTTP：DSh 官方 webServer 优先（kind/path/handler 协议），回退 http/router
+    // HTTP: official DSH webServer first (kind/path/handler protocol), fallback to http/router
     if (!mounted.find(([k]) => k === 'http')) {
       const curWs = $webServer ?? safeGet(ctx, 'webServer');
       const curHttp = $http ?? safeGet(ctx, 'http');
@@ -1543,18 +1543,18 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
       }
     }
   };
-  // 立即尝试一次
+  // Try once immediately
   doMount();
 
-  // 延迟挂载：DSh 的 webServer / settings 可能比本插件激活得晚（因为我们 inject=[]，立即激活）。
-  // 每 150ms 探测一次，发现新服务就挂对应 mount，最多 20s。
+  // Deferred mounting: DSH's webServer / settings may activate later than this plugin (because our inject=[] activates immediately).
+  // Probe every 150ms; mount the corresponding path when a new service appears, for up to 20s.
   {
     const MAX_POLL_MS = 20000;
     const INTERVAL_MS = 150;
     const started = Date.now();
     const tick = () => {
       const now = Date.now();
-      // 刷新对 webServer 的缓存
+      // Refresh the webServer cache
       if (!$webServer) $webServer = safeGet(ctx, 'webServer');
       const freshSettings = $settings ?? safeGet(ctx, 'settings');
       const freshPages = $clientPages ?? safeGet(ctx, 'clientPages');
@@ -1567,7 +1567,7 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
         (k === 'settings' && !freshSettings) ||
         (k === 'clientPages' && !freshPages) ||
         (k === 'http' && !$webServer && !safeGet(ctx, 'http') && !safeGet(ctx, 'router') && (now - started) > MAX_POLL_MS));
-      // 超时时打日志（哪怕 http 没装上）
+      // Log on timeout (even if http wasn't mounted)
       if (!mounted.find(([k]) => k === 'http') && ((now - started) >= MAX_POLL_MS || allDone)) {
         log.warn?.(`[cli-hub:web] HTTP not mounted after ${now - started}ms; hasWebServer=${typeof $webServer} hasHttp=${typeof safeGet(ctx, 'http')} hasRouter=${typeof safeGet(ctx, 'router')}`);
       }
@@ -1578,7 +1578,7 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
     setTimeout(tick, INTERVAL_MS);
   }
 
-  // 暴露内存级 ui API（保证 settings/clientPages/http 全不存在时仍有可编程入口，单测也靠它）
+  // Expose the in-memory ui API (guarantees a programmatic entry even when settings/clientPages/http are all absent; unit tests rely on it too)
   const ui = createMemoryUiApi(cliHub, views, ctx, progressRing);
   cliHub.ui = ui;
   if (typeof $set === 'function') { try { $set('cliHub.ui', ui); } catch {} }
@@ -1587,8 +1587,8 @@ export function apply(ctx: Context, cfg: any = undefined, _cliHub3rd: any = unde
   log.info?.(`initial mount via ${okList()}; memory ui API always attached; polling http settings clientPages up to 20s.`);
 }
 
-// 与主插件同样的原因：把 inject 挂到 apply 函数对象上，兼容 loader unwrap 后读 factory.inject
-// 注意：不要挂 apply.Config（否则 Cordis resolveConfig 会尝试走 Standard Schema.validate 崩）
+// Same reason as the main plugin: attach inject onto the apply function object, compatible with reading factory.inject after loader unwrap
+// Note: do not attach apply.Config (otherwise Cordis resolveConfig will try Standard Schema.validate and crash)
 (apply as any).inject = inject;
 Object.defineProperty(apply, 'displayName', { value: name, writable: false, configurable: true });
 

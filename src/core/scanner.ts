@@ -1,17 +1,17 @@
 /**
- * ScannerService —— 本机 CLI 自动发现
+ * ScannerService — automatic local CLI discovery
  *
- * 三层扫描策略：
- *   L1（~20ms）：枚举 PATH 目录下的可执行文件名，与 registry 指纹做 match。
- *                 不启动任何子进程，秒出结果。
- *   L2（~200ms per match）：对 L1 命中的每个候选执行 `cmd --version`，
- *                  用 fingerprint.versionPattern 解析版本。
- *   L3（~300ms per match）：探测登录状态：
- *                  · 检查 fingerprint.envVars 是否存在
- *                  · 检查 fingerprint.configPaths 是否存在（~展开）
- *                  · 运行 fingerprint.authCheck.cmd 并匹配 stdout
+ * Three-tier scan strategy:
+ *   L1 (~20ms): enumerate executable filenames in PATH directories and match them
+ *                 against registry fingerprints. No subprocesses spawned, instant results.
+ *   L2 (~200ms per match): run `cmd --version` for each L1 hit,
+ *                  parse the version with fingerprint.versionPattern.
+ *   L3 (~300ms per match): probe login state:
+ *                  · check whether fingerprint.envVars exist
+ *                  · check whether fingerprint.configPaths exist (~ expanded)
+ *                  · run fingerprint.authCheck.cmd and match stdout
  *
- * 暴露流式 API（watchScan）和 Promise API（scan）。
+ * Exposes a streaming API (watchScan) and a Promise API (scan).
  */
 import os from 'node:os';
 import path from 'node:path';
@@ -62,7 +62,7 @@ export class ScannerServiceImpl implements ScannerService {
     private _config: ScannerConfig,
   ) {}
 
-  // ================ 对外 API ================
+  // ================ Public API ================
   async scan(opts: {
     depth?: ScanDepth;
     adapterIds?: string[];
@@ -76,7 +76,7 @@ export class ScannerServiceImpl implements ScannerService {
       ? (opts.adapterIds.map(id => this._registry.get(id)).filter(Boolean) as any[])
       : this._registry.listAdapters();
 
-    // 1. 构建 "文件名 → candidate adapters" 索引
+    // 1. Build a "filename → candidate adapters" index
     const nameToAdapters = new Map<string, typeof adapters>();
     for (const def of adapters) {
       for (const cmd of def.fingerprint.commandNames) {
@@ -85,7 +85,7 @@ export class ScannerServiceImpl implements ScannerService {
         nameToAdapters.get(key)!.push(def);
       }
     }
-    // 2. L1：PATH 扫描
+    // 2. L1: PATH scan
     const pathEntries = this._listPathEntries();
     const candidates: Array<{ entry: PathEntry; adapterDef: any }> = [];
     const unmatchedButKnown: ScanItem[] = [];
@@ -99,7 +99,7 @@ export class ScannerServiceImpl implements ScannerService {
         nameToAdapters.delete(key);
         nameToAdapters.delete(stripped);
       } else if (this._config.showUnknown && this._looksLikeAiCli(entry.name)) {
-        // 展示给用户"未知 AI CLI"
+        // Show the user as an "unknown AI CLI"
         unmatchedButKnown.push({
           adapterId: null,
           executablePath: entry.fullPath,
@@ -115,7 +115,7 @@ export class ScannerServiceImpl implements ScannerService {
     let done = 0;
     const results: ScanItem[] = [];
 
-    // 3. 顺序 L2/L3（避免一次 fork 太多进程）
+    // 3. Sequential L2/L3 (avoid forking too many processes at once)
     for (const { entry, adapterDef } of candidates) {
       const item: ScanItem = {
         adapterId: adapterDef.id,
@@ -198,9 +198,9 @@ export class ScannerServiceImpl implements ScannerService {
     return this;
   }
 
-  // ================ 内部实现 ================
+  // ================ Internal implementation ================
   private _listPathEntries(): PathEntry[] {
-    // 5 秒缓存，避免高频 PATH 扫描
+    // 5-second cache to avoid high-frequency PATH scans
     const now = Date.now();
     if (this._pathCache && now - this._pathCache.ts < 5000) return this._pathCache.entries;
 
@@ -246,28 +246,28 @@ export class ScannerServiceImpl implements ScannerService {
   }
 
   /**
-   * 收集所有可能装了 AI CLI 的扫描目录。
+   * Collect all scan directories that may contain AI CLIs.
    *
-   * 层次：
-   *   1. $PATH 中的目录（已展开 ~/.local/bin 等）
-   *   2. 用户家目录下的常用 bin：~/.local/bin、~/.bun/bin、~/.cargo/bin、~/go/bin、
-   *      ~/.local/share/pnpm、~/.local/share/npm-global/bin、~/Library/Python/{ver}/bin
-   *   3. macOS App bundle 内嵌 CLI：
+   * Layers:
+   *   1. Directories in $PATH (~/.local/bin etc. already expanded)
+   *   2. Common bin dirs under the user's home: ~/.local/bin, ~/.bun/bin, ~/.cargo/bin, ~/go/bin,
+   *      ~/.local/share/pnpm, ~/.local/share/npm-global/bin, ~/Library/Python/{ver}/bin
+   *   3. CLIs embedded in macOS App bundles:
    *      /Applications/{App}.app/Contents/MacOS/
    *      /Applications/{App}.app/Contents/Resources/app/modules/ai-agent/bin/
    *      /Applications/{App}.app/Contents/Resources/bin/
-   *   4. macOS 包管理器：/usr/local/bin、/opt/homebrew/bin、/opt/homebrew/sbin
-   *   5. npm global bin（动态查 npm config get prefix）
-   *   6. npm global lib/node_modules/{pkg}/bin（如 @anthropic-ai/claude-code 的 bin）
+   *   4. macOS package managers: /usr/local/bin, /opt/homebrew/bin, /opt/homebrew/sbin
+   *   5. npm global bin (dynamically query npm config get prefix)
+   *   6. npm global lib/node_modules/{pkg}/bin (e.g. the bin of @anthropic-ai/claude-code)
    *
-   * 不依赖 shell 子进程，纯 fs 调用，速度快且安全。
+   * No shell subprocesses involved — pure fs calls, fast and safe.
    */
   private _collectScanDirs(): string[] {
     const home = os.homedir();
     const rawPath = process.env.PATH ?? '';
     const pathDirs = rawPath.split(path.delimiter).filter(Boolean);
 
-    // 1/2. 用户家目录下的常用 bin
+    // 1/2. Common bin dirs under the user's home
     const homeBins: (string | undefined)[] = [
       `${home}/.local/bin`,
       `${home}/.bun/bin`,
@@ -279,9 +279,9 @@ export class ScannerServiceImpl implements ScannerService {
       `${home}/.volta/bin`,
       `${home}/.deno/bin`,
       `${home}/.foundry/bin`,
-      // Python 用户脚本目录（pip install --user 装的 CLI 在这）
+      // Python user script dir (CLIs installed via pip install --user live here)
       ...this._pythonUserBins(home),
-      // 各种 IDE/Agent 自带的 bin 目录
+      // Bin dirs bundled with various IDEs/Agents
       `${home}/.codeium/windsurf/bin`,
       `${home}/.catpawai/bin`,
       `${home}/.grok/bin`,
@@ -292,12 +292,12 @@ export class ScannerServiceImpl implements ScannerService {
       `${home}/.config/claude/bin`,
     ];
 
-    // 3. macOS App bundle 内嵌 CLI
+    // 3. CLIs embedded in macOS App bundles
     const appBundleBins = process.platform === 'darwin'
       ? this._discoverAppBundleBins()
       : [];
 
-    // 4. macOS 包管理器
+    // 4. macOS package managers
     const pkgManagerBins: (string | undefined)[] = [
       '/usr/local/bin',
       '/usr/local/sbin',
@@ -310,7 +310,7 @@ export class ScannerServiceImpl implements ScannerService {
     // 5/6. npm global
     const npmBins = this._discoverNpmGlobalBins(home);
 
-    // 合并 + 去重（保序：PATH 在前，home bin、app bundle、pkg mgr、npm 在后）
+    // Merge + dedupe (order preserved: PATH first, then home bins, app bundles, pkg mgrs, npm)
     const all = [
       ...pathDirs,
       ...homeBins,
@@ -319,12 +319,12 @@ export class ScannerServiceImpl implements ScannerService {
       ...npmBins,
     ].filter((d): d is string => !!d && d.length > 0);
 
-    // 去掉重复，但保留首次出现的顺序
+    // Remove duplicates while preserving first-occurrence order
     const dedup = Array.from(new Set(all));
     return dedup;
   }
 
-  /** 探测 Python 用户脚本目录（macOS 上是 ~/Library/Python/3.x/bin，Linux 是 ~/.local/bin） */
+  /** Probe Python user script dirs (on macOS: ~/Library/Python/3.x/bin, on Linux: ~/.local/bin) */
   private _pythonUserBins(home: string): string[] {
     const results: string[] = [];
     if (process.platform === 'darwin') {
@@ -335,7 +335,7 @@ export class ScannerServiceImpl implements ScannerService {
           const binDir = path.join(base, v, 'bin');
           results.push(binDir);
         }
-      } catch { /* Python 未装 */ }
+      } catch { /* Python not installed */ }
     } else if (process.platform === 'linux') {
       results.push(`${home}/.local/bin`);
     }
@@ -343,10 +343,10 @@ export class ScannerServiceImpl implements ScannerService {
   }
 
   /**
-   * 探测 macOS /Applications 下的 AI IDE App bundle 内嵌 CLI。
+   * Discover CLIs embedded in AI IDE App bundles under macOS /Applications.
    *
-   * 已知会内嵌 CLI 的 App：
-   *   - Claude.app        → Contents/MacOS/claude (软链)
+   * Apps known to embed CLIs:
+   *   - Claude.app        → Contents/MacOS/claude (symlink)
    *   - Gemini.app        → Contents/MacOS/gemini
    *   - OpenCode.app       → Contents/MacOS/opencode
    *   - Ollama.app         → Contents/MacOS/ollama
@@ -355,7 +355,7 @@ export class ScannerServiceImpl implements ScannerService {
    *   - Windsurf.app       → Contents/Resources/app/bin/windsurf
    *   - Zed.app            → Contents/Resources/app/bin/zed
    *
-   * 这些二进制不一定在 PATH 上，必须主动枚举才能发现。
+   * These binaries are not necessarily on PATH; they must be enumerated proactively to be found.
    */
   private _discoverAppBundleBins(): string[] {
     const results: string[] = [];
@@ -375,10 +375,10 @@ export class ScannerServiceImpl implements ScannerService {
         ];
         for (const c of candidates) {
           try {
-            // 只验证目录存在；L1 主循环会逐个 stat/exec
+            // Only verify the directory exists; the L1 main loop stats/execs each entry
             const s = fs.statSync(c);
             if (s.isDirectory()) results.push(c);
-          } catch { /* 不存在则跳过 */ }
+          } catch { /* skip if missing */ }
         }
       }
     }
@@ -386,59 +386,60 @@ export class ScannerServiceImpl implements ScannerService {
   }
 
   /**
-   * 探测 npm 全局 bin 目录。
+   * Discover npm global bin directories.
    *
-   * 优先级：
-   *   1. npm config get prefix（但要 fork，避免在扫描循环里调）
-   *   2. 常见默认路径推断：
+   * Priority:
+   *   1. npm config get prefix (requires a fork, avoid calling it inside the scan loop)
+   *   2. Infer from common default paths:
    *      - homebrew node:    /opt/homebrew
    *      - nvm/volta:        $HOME/.nvm/versions/node/{ver}/bin, $HOME/.volta/bin
-   *      - n 管理器:         /usr/local/n/versions/node/{ver}/bin
+   *      - n manager:        /usr/local/n/versions/node/{ver}/bin
    *      - nodenv:           $HOME/.nodenv/versions/{ver}/bin
-   *   3. 解析 $HOME/.local/lib/node_modules/{pkg}/{bin or package.json#bin} 的软链目标
-   *      （很多 CLI 用 npm i -g 装但 bin 名和包名不一致，如 @anthropic-ai/claude-code）
+   *   3. Resolve symlink targets of $HOME/.local/lib/node_modules/{pkg}/{bin or package.json#bin}
+   *      (many CLIs installed via npm i -g have bin names that differ from the package name,
+   *      e.g. @anthropic-ai/claude-code)
    */
   private _discoverNpmGlobalBins(home: string): string[] {
     const results: string[] = [];
-    // 常见 npm prefix 候选
+    // Common npm prefix candidates
     const prefixCandidates = [
-      `${home}/.local`,                              // 用户级 npm prefix
+      `${home}/.local`,                              // user-level npm prefix
       `${home}/.npm-global`,
-      '/usr/local',                                  // 系统 npm
+      '/usr/local',                                  // system npm
       '/opt/homebrew',                               // Apple Silicon homebrew
       `${home}/.volta`,
     ];
     for (const prefix of prefixCandidates) {
       results.push(`${prefix}/bin`);
     }
-    // nvm：枚举所有版本
+    // nvm: enumerate all versions
     try {
       const nvmVersions = `${home}/.nvm/versions/node`;
       for (const v of fs.readdirSync(nvmVersions)) {
         results.push(`${nvmVersions}/${v}/bin`);
       }
-    } catch { /* nvm 未装 */ }
+    } catch { /* nvm not installed */ }
     // nodenv
     try {
       const nodenv = `${home}/.nodenv/versions`;
       for (const v of fs.readdirSync(nodenv)) {
         results.push(`${nodenv}/${v}/bin`);
       }
-    } catch { /* nodenv 未装 */ }
+    } catch { /* nodenv not installed */ }
 
-    // 解析 npm prefix/lib/node_modules 下的包 bin（包名和 bin 名不同的情况）
+    // Resolve package bins under npm prefix/lib/node_modules (where bin name differs from package name)
     for (const prefix of prefixCandidates) {
       const nmDir = `${prefix}/lib/node_modules`;
       try {
         const scopes = fs.readdirSync(nmDir);
         for (const scope of scopes) {
-          // scope 可能是 @xxx 目录，也可能是直接包
+          // scope may be an @xxx directory or a direct package
           const scopePath = path.join(nmDir, scope);
           let stat;
           try { stat = fs.statSync(scopePath); } catch { continue; }
           if (!stat.isDirectory()) continue;
           if (scope.startsWith('@')) {
-            // 枚举 scope 下的包
+            // Enumerate packages under the scope
             let pkgDirs: string[] = [];
             try { pkgDirs = fs.readdirSync(scopePath); } catch { continue; }
             for (const pkg of pkgDirs) {
@@ -446,16 +447,16 @@ export class ScannerServiceImpl implements ScannerService {
               const binDir = path.join(pkgPath, 'bin');
               try {
                 if (fs.statSync(binDir).isDirectory()) results.push(binDir);
-              } catch { /* 无 bin 目录 */ }
+              } catch { /* no bin directory */ }
             }
           } else {
             const binDir = path.join(scopePath, 'bin');
             try {
               if (fs.statSync(binDir).isDirectory()) results.push(binDir);
-            } catch { /* 无 bin 目录 */ }
+            } catch { /* no bin directory */ }
           }
         }
-      } catch { /* 路径不存在 */ }
+      } catch { /* path does not exist */ }
     }
     return results;
   }
@@ -465,18 +466,18 @@ export class ScannerServiceImpl implements ScannerService {
   }
 
   private _looksLikeAiCli(name: string): boolean {
-    // 启发式：名字匹配常见 AI CLI 关键字段（用于"未匹配 adapter 但仍展示"）
+    // Heuristic: match name against common AI CLI keywords (for "no adapter matched but still shown")
     const n = name.toLowerCase();
-    // 完全匹配 / 前缀 / 后缀 三种命中方式
+    // Three hit styles: exact match / prefix / suffix
     const keywords = [
-      // 通用 AI 关键字
+      // Generic AI keywords
       'gpt', 'ai', 'llm', 'agent', 'code', 'cli', 'bot', 'pilot', 'devin',
       'factory', 'droid', 'vibe', 'nano',
-      // 已知 AI CLI / IDE 厂商产品名
+      // Known AI CLI / IDE vendor product names
       'claude', 'codex', 'copilot', 'gemini', 'kimi', 'qwen', 'grok', 'aider',
       'cline', 'continue', 'cursor', 'windsurf', 'aichat', 'tgpt', 'ollama',
       'litellm', 'goose', 'mistral', 'snow', 'junie', 'trae', 'hermes',
-      // 第二方/开源 AI Agent
+      // Second-party / open-source AI agents
       'paperclip', 'freebuff', 'soul', 'catpaw', 'catpawai',
       'openclaw', 'claw', 'acp', 'mcp', 'openai', 'anthropic',
       'harness', 'openclaudia', 'opencode',
@@ -504,7 +505,7 @@ export class ScannerServiceImpl implements ScannerService {
       const m = text.match(fp.versionPattern);
       if (m) return m[1] ?? m[0];
     }
-    // fallback：抓第一个类似版本号的 token
+    // fallback: grab the first version-like token
     const m = text.match(/(\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)?)/);
     return m ? m[1] : text.split(/\s+/)[0];
   }
@@ -514,11 +515,12 @@ export class ScannerServiceImpl implements ScannerService {
     fp: CliFingerprint,
     timeout: number,
   ): Promise<{ state: AuthState; hint?: string }> {
-    // a) env vars（强证据：命中即认为已登录）
+    // a) env vars (strong evidence: a hit means logged in)
     if (fp.envVars?.some(v => process.env[v])) return { state: 'authenticated' };
 
-    // b) config paths（弱证据：只表示"曾配置过"，不等同于已登录/凭证有效）
-    //    不立即返回，让后续 authCheck 给出更准确定性判断；若最后没有 authCheck，再退化为 unknown
+    // b) config paths (weak evidence: only indicates "was configured at some point", not that
+    //    the user is logged in / credentials are valid). Don't return immediately — let the
+    //    subsequent authCheck give a more definitive verdict; degrade to unknown if there's no authCheck
     let weakState: AuthState = 'unauthenticated';
     if (fp.configPaths?.length) {
       for (const p of fp.configPaths) {
@@ -534,7 +536,7 @@ export class ScannerServiceImpl implements ScannerService {
       }
     }
 
-    // c) authCheck command（强证据：优先以正则/exitCode 结果为准）
+    // c) authCheck command (strong evidence: prefer regex/exitCode results)
     if (fp.authCheck) {
       try {
         const parts = fp.authCheck.cmd.split(/\s+/);
@@ -545,16 +547,16 @@ export class ScannerServiceImpl implements ScannerService {
         const { stdout, stderr, exitCode } = await this._safeExec(cmd, parts, timeout);
         const out = `${stdout}\n${stderr}`;
         if (fp.authCheck.expectExpired && fp.authCheck.expectExpired.test(out))
-          return { state: 'expired', hint: '凭证已过期，请重新登录' };
+          return { state: 'expired', hint: 'Credentials expired, please log in again' };
         if (fp.authCheck.expectUnauthenticated && fp.authCheck.expectUnauthenticated.test(out)) {
-          return { state: 'unauthenticated', hint: `请执行 \`${fp.authCheck.cmd.replace('status', 'login')}\`` };
+          return { state: 'unauthenticated', hint: `Please run \`${fp.authCheck.cmd.replace('status', 'login')}\`` };
         }
         if (fp.authCheck.expectAuthenticated && fp.authCheck.expectAuthenticated.test(out))
           return { state: 'authenticated' };
         if (exitCode === 0) return { state: 'authenticated' };
         return { state: 'unauthenticated' };
       } catch (e: any) {
-        // authCheck 抛错不能 100% 代表凭证无效，降级为 unknown（但至少保留 hint）
+        // An authCheck error doesn't 100% mean credentials are invalid; degrade to unknown (but keep at least a hint)
         return {
           state: 'unknown',
           hint: `auth check failed: ${String(e.message ?? e).slice(0, 60)}`,
@@ -562,7 +564,7 @@ export class ScannerServiceImpl implements ScannerService {
       }
     }
 
-    // 没有 authCheck → 退回弱判断
+    // No authCheck → fall back to weak judgment
     return { state: weakState };
   }
 
@@ -579,16 +581,16 @@ export class ScannerServiceImpl implements ScannerService {
     return null;
   }
 
-  /** 最小安全执行：不拼接 shell，使用 execFile 语义。实际 DSH 里应替换为 ctx.subprocess.exec。 */
+  /** Minimal safe execution: no shell concatenation, execFile semantics. In real DSH, replace with ctx.subprocess.exec. */
   private async _safeExec(
     file: string,
     args: string[],
     timeoutMs: number,
   ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-    // macOS launchd 后台进程会重置 PATH；补全 _collectScanDirs 中的所有 bin 目录
-    // 确保 spawn 子进程能找到 ~/.local/bin/claude、/opt/homebrew/bin/gemini 等
+    // macOS launchd background processes reset PATH; add all bin dirs from _collectScanDirs
+    // so spawned subprocesses can find ~/.local/bin/claude, /opt/homebrew/bin/gemini, etc.
     const scanEnv = this._withExtendedPath(process.env);
-    // 优先走 DSH subprocess（如果有）—— 必须走 safeGetCtx，避免 Cordis proxy 抛「cannot get subprocess without inject」
+    // Prefer the DSH subprocess (if available) — must go through safeGetCtx to avoid the Cordis proxy throwing "cannot get subprocess without inject"
     try {
       const sp: any = safeGetCtx(this._ctx, 'subprocess');
       if (sp && typeof sp.exec === 'function') {
@@ -600,11 +602,11 @@ export class ScannerServiceImpl implements ScannerService {
           });
           return { stdout: r.stdout ?? '', stderr: r.stderr ?? '', exitCode: r.exitCode ?? null };
         } catch (e: any) {
-          // DSH subprocess 执行失败时，降级到本机 child_process
+          // When DSH subprocess execution fails, degrade to the native child_process
           return await this._safeExecNative(file, args, timeoutMs, `subprocess.exec failed: ${String(e?.message ?? e).slice(0, 120)}`);
         }
       }
-    } catch { /* 读到 subprocess 被 proxy 拦截时，忽略并走 fallback */ }
+    } catch { /* ignore when reading subprocess is intercepted by the proxy, and use the fallback */ }
     return await this._safeExecNative(file, args, timeoutMs);
   }
 
@@ -626,8 +628,8 @@ export class ScannerServiceImpl implements ScannerService {
       }, timeoutMs);
       let child: any;
       try {
-        // macOS launchd 后台进程会重置 PATH 到 /usr/bin:/bin:/usr/sbin:/sbin
-        // 复用 _collectScanDirs 推导的全部目录，确保能找到 ~/.local/bin/claude 等
+        // macOS launchd background processes reset PATH to /usr/bin:/bin:/usr/sbin:/sbin
+        // Reuse all dirs derived by _collectScanDirs so ~/.local/bin/claude etc. can be found
         const env = this._withExtendedPath(process.env);
         child = spawn(file, args, { stdio: ['ignore', 'pipe', 'pipe'], env });
       } catch (e: any) {
@@ -654,10 +656,10 @@ export class ScannerServiceImpl implements ScannerService {
   }
 
   /**
-   * 给 env 注入扩展后的 PATH。
+   * Inject the extended PATH into env.
    *
-   * _safeExec / _safeExecNative 用这个来给 fork 出来的子进程一个完整的 PATH，
-   * 让 `claude --version` / `kimi auth status` 等能在 launchd 重置 PATH 的环境下也能跑。
+   * _safeExec / _safeExecNative use this to give forked subprocesses a complete PATH,
+   * so `claude --version` / `kimi auth status` etc. still run when launchd resets PATH.
    */
   private _withExtendedPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     const scanDirs = this._collectScanDirs();

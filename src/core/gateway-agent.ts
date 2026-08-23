@@ -1,13 +1,13 @@
 /**
- * AgentGateway —— Agent 模式核心：长生命周期子进程管理 + 协议适配
+ * AgentGateway — core of Agent mode: long-lived subprocess management + protocol adaptation
  *
- * 设计原则（踩坑总结于之前经验）：
- *  1) 不重复 spawn：sessionId + adapterId 双索引，同一 adapterId 要求并发限制为 1。
- *  2) ready 按行匹配：不用 buffer.indexOf，避免半包导致 readyPattern 只来一半"看似没到"。
- *  3) shutdown 三阶段：SIGINT → graceMs → SIGTERM → 2s → SIGKILL，杜绝孤儿进程。
- *  4) 协议分层：Session 内建 JsonRpcLine / LineBased 两种最低层抽象，mcp/其他套娃。
- *  5) 双运行时：优先 ctx.subprocess.spawn（DSH 提供的带沙箱版本），
- *                 缺失时 fallback 到 node child_process.spawn，方便单测。
+ * Design principles (lessons learned from past experience):
+ *  1) No duplicate spawns: dual index by sessionId + adapterId; concurrency limit of 1 per adapterId.
+ *  2) Line-based ready matching: no buffer.indexOf, to avoid partial packets where only half of readyPattern arrives and looks "not yet received".
+ *  3) Three-stage shutdown: SIGINT → graceMs → SIGTERM → 2s → SIGKILL, eliminating orphan processes.
+ *  4) Layered protocols: Session provides two lowest-level abstractions, JsonRpcLine / LineBased; mcp and others build on top.
+ *  5) Dual runtime: prefer ctx.subprocess.spawn (DSH's sandboxed version),
+ *                 fall back to node child_process.spawn when absent, for easy unit testing.
  */
 import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -20,7 +20,7 @@ import type {
 import { safeGetCtx } from './safe-get';
 
 // ============================================================
-// 对外暴露的类型
+// Public types
 // ============================================================
 export type AgentSessionStatus =
   | 'spawning'
@@ -41,67 +41,67 @@ export interface AgentSession {
   readyAt?: number;
   endedAt?: number;
   /**
-   * 发送一条消息给子进程；返回 Promise 在消息写入后 resolve。
-   * 内容依协议：
-   *   - jsonrpc：{jsonrpc:'2.0', id, method, params} 或 {jsonrpc:'2.0', id, result}
-   *   - line-based：纯字符串（自动加 \n）
-   *   - mcp-stdio：等同 jsonrpc（MCP 2.0 使用 jsonrpc）
-   *   - stream-json：每行一个 JSON 对象（如 Claude Code 的 stream-json 协议）
-   *                  传字符串原样发送，传对象自动 JSON.stringify + '\n'
+   * Send a message to the subprocess; the returned Promise resolves once the message is written.
+   * Content depends on protocol:
+   *   - jsonrpc: {jsonrpc:'2.0', id, method, params} or {jsonrpc:'2.0', id, result}
+   *   - line-based: plain string (\n appended automatically)
+   *   - mcp-stdio: same as jsonrpc (MCP 2.0 uses jsonrpc)
+   *   - stream-json: one JSON object per line (e.g. Claude Code's stream-json protocol);
+   *                  strings are sent as-is, objects are JSON.stringify'd + '\n'
    */
   send(msg: unknown): Promise<void>;
   /**
-   * 等待下一条输入消息（解析后的对象）。
-   * 协议：
-   *   - jsonrpc：解析后的 JSON 对象（请求/响应/通知）
-   *   - line-based：{ line: string }
-   *   - stream-json：解析后的 JSON 对象（每行一个 JSON event）
+   * Wait for the next incoming message (parsed object).
+   * Protocols:
+   *   - jsonrpc: parsed JSON object (request/response/notification)
+   *   - line-based: { line: string }
+   *   - stream-json: parsed JSON object (one JSON event per line)
    */
   recv(timeoutMs?: number): Promise<any>;
-  /** 一次性 RPC：发请求 → 等待 id 匹配的响应 → 返回 result 或抛错 */
+  /** One-shot RPC: send request → wait for the response with matching id → return result or throw */
   request(method: string, params?: any, timeoutMs?: number): Promise<any>;
-  /** 等待 ready 状态（内部使用 readyPattern 或启动后第 1 行） */
+  /** Wait for ready state (internally uses readyPattern or the first line after startup) */
   waitReady(timeoutMs?: number): Promise<void>;
-  /** Graceful shutdown（三阶段）*/
+  /** Graceful shutdown (three stages) */
   shutdown(): Promise<void>;
-  /** 订阅事件：status-change / line / jsonrpc-message / error / exit*/
+  /** Subscribe to events: status-change / line / jsonrpc-message / error / exit */
   on(event: string, listener: (...args: any[]) => void): void;
   off(event: string, listener: (...args: any[]) => void): void;
-  /** 最近一次 stderr 的最后 N 行，调试用 */
+  /** Last N lines of recent stderr, for debugging */
   tailStderr(n?: number): string;
-  /** 进程 pid（fallback spawn 才有） */
+  /** Process pid (only available with fallback spawn) */
   pid?: number;
 }
 
 export interface SpawnOptions {
-  /** 额外环境变量（与 adapter.env 合并，优先本参数） */
+  /** Extra environment variables (merged with adapter.env; this parameter takes precedence) */
   extraEnv?: Record<string, string>;
-  /** 工作目录（会覆盖 workdirVar 解析结果） */
+  /** Working directory (overrides the workdirVar resolution result) */
   cwd?: string;
-  /** DSH 工具共享：给子进程暴露 DSH 工具通道（预留协议钩子） */
+  /** DSH tool sharing: expose the DSH tool channel to the subprocess (reserved protocol hook) */
   shareDshTools?: boolean;
-  /** 可执行文件路径覆盖：如 L2 扫描已得到的 execPath */
+  /** Executable path override: e.g. an execPath already obtained from the L2 scan */
   execPath?: string;
 }
 
 export interface AgentGateway {
   /**
-   * 启动一个 Agent 子进程。若 adapter 已存在未停止的 session，
-   * 默认复用并返回（adapter 级别单例）；reuse=false 会返回冲突错误。
+   * Start an Agent subprocess. If the adapter already has a session that hasn't stopped,
+   * reuse and return it by default (singleton per adapter); reuse=false returns a conflict error.
    */
   spawn(adapterId: string, opts?: SpawnOptions & { reuse?: boolean }): Promise<AgentSession>;
-  /** 获取某 adapter 的当前 session（没有则 undefined） */
+  /** Get the current session of an adapter (undefined if none) */
   getSession(adapterId: string): AgentSession | undefined;
-  /** 列出所有活着的 session */
+  /** List all live sessions */
   listSessions(): Array<{ sessionId: string; adapterId: string; status: AgentSessionStatus; pid?: number; durationMs: number }>;
-  /** 停止一个 session */
+  /** Stop a session */
   stop(adapterId: string): Promise<boolean>;
-  /** 停止所有 session（DSH 退出时钩子）*/
+  /** Stop all sessions (hook on DSH exit) */
   stopAll(): Promise<void>;
 }
 
 // ============================================================
-// 内部实现
+// Internal implementation
 // ============================================================
 interface SpawnHandle {
   pid?: number;
@@ -119,20 +119,20 @@ type RuntimeCtx = {
 };
 
 interface AgentGatewayConfig {
-  /** 默认准备时间 */
+  /** Default ready timeout */
   defaultReadyTimeoutMs?: number;
-  /** 默认关断周期 */
+  /** Default shutdown grace period */
   defaultShutdownGraceMs?: number;
-  /** 每个 adapter 是否强制单例 */
+  /** Whether to enforce singleton per adapter */
   singletonPerAdapter?: boolean;
-  /** sandboxLevel 透传给 ctx.subprocess */
+  /** sandboxLevel passed through to ctx.subprocess */
   sandboxLevel?: 'default' | 'strict';
 }
 
 export class AgentGatewayImpl implements AgentGateway {
   private _emitter = new EventEmitter();
   private _sessions = new Map<string, AgentSessionImpl>(); // sessionId → session
-  private _byAdapter = new Map<string, AgentSessionImpl>(); // adapterId → 单例 session
+  private _byAdapter = new Map<string, AgentSessionImpl>(); // adapterId → singleton session
   private _config: Required<Pick<AgentGatewayConfig,
     'defaultReadyTimeoutMs' | 'defaultShutdownGraceMs' | 'singletonPerAdapter'>>;
 
@@ -148,7 +148,7 @@ export class AgentGatewayImpl implements AgentGateway {
     };
   }
 
-  // ---- 公共 API ----
+  // ---- Public API ----
   async spawn(adapterId: string, opts: SpawnOptions & { reuse?: boolean } = {}): Promise<AgentSession> {
     const def = this._registry.get(adapterId);
     if (!def) throw new Error(`[cli-hub] agent adapter not found: ${adapterId}`);
@@ -166,8 +166,8 @@ export class AgentGatewayImpl implements AgentGateway {
       homedir: (process as any).env.HOME || (process as any).env.USERPROFILE || '/tmp',
       env: { ...(process as any).env },
     };
-    // macOS launchd 后台进程会重置 PATH 到 /usr/bin:/bin:/usr/sbin:/sbin
-    // 主动补全常见 bin 目录，确保 agent 子进程能找到 claude / gemini / codex 等
+    // macOS launchd background processes reset PATH to /usr/bin:/bin:/usr/sbin:/sbin
+    // Proactively add common bin directories so agent subprocesses can find claude / gemini / codex etc.
     {
       const extraPaths = [
         rctx.homedir ? `${rctx.homedir}/.local/bin` : undefined,
@@ -195,7 +195,7 @@ export class AgentGatewayImpl implements AgentGateway {
     this._byAdapter.set(adapterId, session);
     session.on('status-change', (st: AgentSessionStatus) => {
       if (st === 'shutdown' || st === 'error') {
-        // 延迟清理，方便调用方拿最后状态
+        // Delayed cleanup so callers can still read the final status
         setTimeout(() => {
           if (this._byAdapter.get(adapterId) === session) this._byAdapter.delete(adapterId);
         }, 30_000);
@@ -205,7 +205,7 @@ export class AgentGatewayImpl implements AgentGateway {
     try {
       await session._start();
     } catch (e) {
-      // 启动失败：同步清掉
+      // Startup failed: clean up synchronously
       this._sessions.delete(session.sessionId);
       if (this._byAdapter.get(adapterId) === session) this._byAdapter.delete(adapterId);
       throw e;
@@ -285,7 +285,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     this.spawnedAt = Date.now();
   }
 
-  // ---- 生命周期 ----
+  // ---- Lifecycle ----
   async _start() {
     const execPath = this._opts.execPath ?? this._resolveCmd();
     const args = this._renderArgs();
@@ -304,7 +304,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     this._handle = await this._doSpawn(execPath, args, cwd, env);
     this.pid = this._handle.pid;
 
-    // 管线：stderr 仅收集日志；stdout 按协议解析 → 入队列
+    // Pipeline: stderr is only collected for logging; stdout is parsed per protocol → enqueued
     this._pumpLine(this._handle!.stderr, (line) => this._appendStderr(line));
     this._pumpLine(this._handle!.stdout, (line) => this._onOutLine(line));
     this._handle!.onExit.then((code) => {
@@ -313,7 +313,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
       if (!['shutdown', 'error'].includes(prev)) {
         this._set(code === 0 ? 'shutdown' : 'error');
       }
-      // 拒绝所有 pending waiter
+      // Reject all pending waiters
       while (this._recvWaiters.length) {
         const w = this._recvWaiters.shift()!;
         clearTimeout(w.timer);
@@ -337,7 +337,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
   private _resolveCmd(): string {
     const token = this._cap.spawn.command;
     if (!this._cap.spawn.command) throw new Error(`[cli-hub] ${this.adapterId}: agent spawn.command is empty`);
-    // 若 execPath 来自外部扫描，会直接用 opts.execPath；这里只负责 token
+    // If execPath comes from an external scan, opts.execPath is used directly; this only resolves the token
     return token;
   }
 
@@ -357,7 +357,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     try { sp = safeGetCtx(this._ctx, 'subprocess'); } catch {}
     if (sp && typeof sp.spawn === 'function') {
       try {
-        // DSH 风格 subprocess.spawn：期望返回 {stdin, stdout, stderr, onExit(Promise<code>), kill, pid?}
+        // DSH-style subprocess.spawn: expected to return {stdin, stdout, stderr, onExit(Promise<code>), kill, pid?}
         const r = await sp.spawn(cmd, args, {
           cwd,
           env,
@@ -371,14 +371,14 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
           onExit: Promise.resolve(r.onExit).then((p: any) => p),
           kill: (sig) => { try { r.kill?.(sig); } catch {} },
         };
-      } catch { /* 失败降级到 native spawn */ }
+      } catch { /* On failure, fall back to native spawn */ }
     }
     // fallback: node child_process
     return import('node:child_process').then(async ({ spawn }) => {
       const fs_mod = await import('node:fs');
-      // 测试场景：vitest 里 PATH 可能不含 'node' → 用 process.execPath 指到当前 Node 可执行文件
+      // Test scenario: PATH under vitest may not contain 'node' → use process.execPath to point at the current Node executable
       const resolvedCmd = cmd === 'node' ? process.execPath : cmd;
-      // cwd 不存在时 spawn 会 ENOENT；自动 mkdir 或 fallback
+      // spawn fails with ENOENT if cwd doesn't exist; auto mkdir or fall back
       let resolvedCwd = cwd;
       try {
         if (!resolvedCwd || !fs_mod.existsSync(resolvedCwd)) {
@@ -391,7 +391,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
         env,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
-      // 把 Node 原生 stream 适配到 SpawnHandle 的极简接口（满足 stdin.write(str, cb?) / stdout.on('data') / stderr.on('data')）
+      // Adapt Node native streams to SpawnHandle's minimal interface (satisfies stdin.write(str, cb?) / stdout.on('data') / stderr.on('data'))
       const adaptStream = (s: NodeJS.WritableStream | null): SpawnHandle['stdin'] => ({
         write: (chunk: any, cb?: any) => { try { s?.write(chunk, cb as any); } catch {} },
         end: () => { try { s?.end?.(); } catch {} },
@@ -411,7 +411,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     });
   }
 
-  // ---- stdout 行级泵（按行解码，避免半包）----
+  // ---- stdout line-level pump (decodes line by line to avoid partial packets) ----
   private _pumpLine(stream: any, onLine: (line: string) => void) {
     if (!stream) return;
     let buf = '';
@@ -425,14 +425,14 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
         buf = buf.slice(idx + 1);
         try { onLine(line); } catch (e) { this.emit('error', e); }
       }
-      // REPL 风格的 readyPattern（例如 "snow> " 不以换行结束）永远得不到 \n。
-      // 如果依然在等待 ready，把当前 buf（不完整行）也交给 onLine，让 _onOutLine 有机会命中 readyPattern。
-      // 命中一次即可（readyAt 设置后下面不再触发），不影响后续常规 line 解析。
+      // REPL-style readyPattern (e.g. "snow> " without a trailing newline) never gets a \n.
+      // If still waiting for ready, hand the current buf (incomplete line) to onLine too, giving _onOutLine a chance to hit readyPattern.
+      // One hit is enough (once readyAt is set this no longer triggers), and it doesn't affect regular line parsing afterwards.
       if (buf.length > 0 && this.readyAt === undefined) {
         const beforeReady = this.readyAt;
         try { onLine(buf); } catch (e) { this.emit('error', e); }
         if (this.readyAt !== beforeReady) {
-          // ready 已命中：partial buf 作为 prompt 被消费，不再拼接到下一次 chunk
+          // Ready matched: the partial buf was consumed as the prompt, don't concatenate it into the next chunk
           buf = '';
         }
       }
@@ -456,31 +456,31 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     this._lines.push(line);
     this.emit('line', line);
 
-    // 只要尚未 ready，任何新行都尝试匹配 readyPattern
+    // While not yet ready, every new line attempts to match readyPattern
     if (this.readyAt === undefined) {
       const pat = this._cap.spawn.readyPattern;
-      const matched = !pat           // 无 readyPattern = 首行就认为 ready
+      const matched = !pat           // no readyPattern = treat the first line as ready
         || (line.indexOf(pat) !== -1);
       if (matched) {
         this.readyAt = Date.now();
         this._set('ready');
         this.emit('ready');
-        // ready 行本身不进消息队列（prompt/banner）
+        // The ready line itself doesn't enter the message queue (prompt/banner)
         return;
       }
-      // ready 之前的其他 banner 行也不进入消息队列
+      // Other banner lines before ready also don't enter the message queue
       return;
     }
 
-    // 按协议解析
-    // 重要：ready 之前的 banner/初始化输出**不进入**消息队列，避免 recv() 先拿到 banner
+    // Parse per protocol
+    // Important: banner/initialization output before ready does **not** enter the message queue, so recv() won't get a banner first
     if (this.readyAt === undefined) return;
 
     let parsed: any = null;
     if (this.protocol === 'stdio-jsonrpc' || this.protocol === 'mcp-stdio') {
       const trim = line.trim();
       if (!trim) return;
-      try { parsed = JSON.parse(trim); } catch { /* 非 JSON 行忽略 */ return; }
+      try { parsed = JSON.parse(trim); } catch { /* ignore non-JSON lines */ return; }
       this.emit('jsonrpc-message', parsed);
       this._enqueue(parsed);
       if (parsed && parsed.id !== undefined && (parsed.result !== undefined || parsed.error)) {
@@ -493,10 +493,10 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
         }
       }
     } else if (this.protocol === 'stream-json') {
-      // Claude Code stream-json：每行一个 JSON event，直接解析为对象
+      // Claude Code stream-json: one JSON event per line, parsed directly into an object
       const trim = line.trim();
       if (!trim) return;
-      try { parsed = JSON.parse(trim); } catch { /* 非 JSON 行忽略 */ return; }
+      try { parsed = JSON.parse(trim); } catch { /* ignore non-JSON lines */ return; }
       this.emit('stream-message', parsed);
       this._enqueue(parsed);
     } else {
@@ -518,7 +518,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     }
   }
 
-  // ---- 公共 API（send/recv/request/waitReady/shutdown）----
+  // ---- Public API (send/recv/request/waitReady/shutdown) ----
   async send(msg: unknown): Promise<void> {
     if (!this._handle) throw new Error('agent not spawned');
     if (['shutdown', 'error'].includes(this.status)) throw new Error(`agent ${this.status}`);
@@ -537,7 +537,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
       return JSON.stringify(msg) + '\n';
     }
     if (this.protocol === 'stream-json') {
-      // stream-json：对象 → JSON + '\n'；字符串 → 原样 + '\n'（已有 \n 则不重复）
+      // stream-json: object → JSON + '\n'; string → as-is + '\n' (skip if already ends with \n)
       if (typeof msg === 'string') return msg.endsWith('\n') ? msg : msg + '\n';
       return JSON.stringify(msg) + '\n';
     }
@@ -604,19 +604,19 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
     let done = false;
     const finish = () => { if (done) return; done = true; this._closed = true; this._set('shutdown'); };
 
-    // 阶段 1：优雅信号 + 等 onExit
+    // Stage 1: graceful signal + wait for onExit
     h.kill(sig1);
     const onExitP = h.onExit.then(() => finish());
     const stage1 = new Promise<void>((r) => setTimeout(r, graceMs));
     await Promise.race([onExitP, stage1]);
     if (done) return;
 
-    // 阶段 2：SIGTERM
+    // Stage 2: SIGTERM
     h.kill('SIGTERM');
     await new Promise(r => setTimeout(r, 2000));
     if (done) return;
 
-    // 阶段 3：SIGKILL
+    // Stage 3: SIGKILL
     h.kill('SIGKILL');
     await new Promise(r => setTimeout(r, 1000));
     finish();
@@ -634,7 +634,7 @@ class AgentSessionImpl extends EventEmitter implements AgentSession {
 }
 
 // ============================================================
-// 工厂函数（给 index.ts 装配）
+// Factory function (wired up by index.ts)
 // ============================================================
 export function createAgentGateway(
   ctx: Context,
