@@ -18,6 +18,7 @@ import { createAgentGateway } from './core/gateway-agent';
 import { loadBuiltinAdapters } from './adapters/builtin';
 import * as cliPlugin from './cli/index';
 import * as webPlugin from './web/index';
+import * as llmPlugin from './llm/index';
 import type {
   CliHubService,
   ScanResult,
@@ -470,6 +471,7 @@ export function apply(ctx: Context, config: Config = {}) {
   };
   mountSubPlugin(cliPlugin, 'cli');
   mountSubPlugin(webPlugin, 'web');
+  mountSubPlugin(llmPlugin, 'llm');
 }
 
 // ============================================================
