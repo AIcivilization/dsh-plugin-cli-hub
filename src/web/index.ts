@@ -1055,7 +1055,7 @@ function mountHttpPath(
       reg('prefix', 'GET', '/plugins/cli-hub/api/llm', async (req, res) => {
         const bridge = (globalThis as any).__clihubLlmBridge ?? (cliHub as any)._llmBridge;
         if (!bridge?.ok || typeof bridge.adapter?.listModels !== 'function') {
-          return send(res, 200, { registered: false, error: bridge?.error ?? 'bridge not mounted', dbg: (globalThis as any).__clihubDbg ?? [] });
+          return send(res, 200, { registered: false, error: bridge?.error ?? 'bridge not mounted', stage: (globalThis as any).__clihubLlmStage ?? null });
         }
         try {
           const models = await bridge.adapter.listModels(bridge.route);
@@ -1067,7 +1067,7 @@ function mountHttpPath(
       reg('prefix', 'GET', '/cli-hub/api/llm', async (req, res) => {
         const bridge = (globalThis as any).__clihubLlmBridge ?? (cliHub as any)._llmBridge;
         if (!bridge?.ok || typeof bridge.adapter?.listModels !== 'function') {
-          return send(res, 200, { registered: false, error: bridge?.error ?? 'bridge not mounted', dbg: (globalThis as any).__clihubDbg ?? [] });
+          return send(res, 200, { registered: false, error: bridge?.error ?? 'bridge not mounted', stage: (globalThis as any).__clihubLlmStage ?? null });
         }
         try {
           const models = await bridge.adapter.listModels(bridge.route);

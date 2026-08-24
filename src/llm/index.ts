@@ -123,12 +123,15 @@ export class CliHubLlmAdapter {
   async listModels(provider: string): Promise<any[]> {
     const items = await lastScanItems(this.cliHub);
     const models: any[] = [];
+    const seen = new Set<string>();
     for (const item of items) {
       const id = item?.adapterId;
-      if (!id || item.authState !== 'authenticated') continue;
+      // One adapter can match several binaries (e.g. codex + codex-code-mode-host) — offer it once.
+      if (!id || seen.has(id) || item.authState !== 'authenticated') continue;
       if (this.cliHub.registry?.isEnabled?.(id) === false) continue;
       const def = this.cliHub.registry?.get?.(id);
       if (!def || !pickRunnableTool(def)) continue;
+      seen.add(id);
       models.push({
         provider,
         id,
@@ -194,7 +197,9 @@ export class CliHubLlmAdapter {
 let applied = false;
 
 export function apply(ctx: Context, cfg: any = undefined, cliHub3rd: any = undefined) {
-  if (applied) return;
+  const g: any = globalThis as any;
+  g.__clihubLlmStage = 'apply-entered';
+  if (applied) { g.__clihubLlmStage = 'skipped-already-applied'; return; }
   applied = true;
 
   const cliHub = cliHub3rd ?? cfg?._cliHub ?? cfg?.config?._cliHub ?? (ctx as any).cliHub;
@@ -207,12 +212,25 @@ export function apply(ctx: Context, cfg: any = undefined, cliHub3rd: any = undef
   const doRegister = (): boolean => {
     // Raw ctx.llm reads return undefined on fibers without 'llm' injected;
     // safeGetCtx goes through internal/service/get(false) fallbacks instead.
-    const llm = (ctx as any).llm ?? safeGetCtx(ctx as any, 'llm');
-    if (!llm || typeof llm.registerAdapter !== 'function') return false;
-    const g = globalThis as any;
+    g.__clihubLlmStage = 'probing-llm-service';
+    let llm: any;
+    try {
+      // NEVER bare-read ctx.llm here: unauthorized property access throws on
+      // Cordis fibers whose inject list omits 'llm'. safeGetCtx bypasses via
+      // internal/service/get(name,false) and also works on plain test objects.
+      llm = safeGetCtx(ctx as any, 'llm');
+    } catch (e: any) {
+      g.__clihubLlmStage = 'llm-read-threw:' + String(e?.message ?? e).slice(0, 60);
+      return false;
+    }
+    if (!llm || typeof llm.registerAdapter !== 'function') {
+      g.__clihubLlmStage = 'llm-service-absent';
+      return false;
+    }
     const adapter = new CliHubLlmAdapter(cliHub, (ctx as any)?.logger);
     // The process may hold more than one plugin application (dual-format loading);
     // the bridge singleton lives on globalThis so every copy observes the same state.
+    g.__clihubLlmStage = 'calling-registerAdapter';
     try {
       llm.registerAdapter([PROVIDER_ROUTE], adapter);
       g.__clihubLlmBridge = { ok: true, stage: 'registered', route: PROVIDER_ROUTE, adapter, at: Date.now() };
