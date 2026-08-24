@@ -215,6 +215,7 @@ export type UiActionId =
   | 'quota-refresh-all'
   | 'tool-exec'
   | 'show-install-hint'
+  | 'cli-login'
   | 'adapter-detail';
 
 export interface UiActionResult {
@@ -271,8 +272,12 @@ export function projectScannerRows(
         payload: { adapterId: i.adapterId, enabled: !enabled },
       });
     }
-    if (i.authState === 'unauthenticated' && def?.installHint) {
-      actions.push({ id: 'show-install-hint', label: 'Login guide', variant: 'info', payload: { adapterId: def.id } });
+    if (i.authState !== 'authenticated') {
+      // Not logged in: offer the per-CLI login entry point (url/cmd/note) instead of a dead text hint.
+      actions.push({ id: 'cli-login', label: 'Log in', variant: 'primary', payload: { adapterId: i.adapterId } });
+      if (def?.installHint) {
+        actions.push({ id: 'show-install-hint', label: 'Install guide', variant: 'info', payload: { adapterId: def.id } });
+      }
     }
     return {
       id: i.adapterId ?? `cmd:${i.commandName}:${i.executablePath}`,
@@ -316,6 +321,9 @@ export function projectAdapterRows(
     ];
     if (def.installHint && !scan) {
       actions.push({ id: 'show-install-hint', label: 'Install guide', variant: 'info', payload: { adapterId: def.id } });
+    }
+    if (scan && scan.authState !== 'authenticated') {
+      actions.push({ id: 'cli-login', label: 'Log in', variant: 'primary', payload: { adapterId: def.id } });
     }
     return {
       id: def.id,
@@ -624,6 +632,31 @@ export async function dispatchUiAction(
       const def = cliHub.registry?.get?.(id);
       if (!def?.installHint) return { ok: false, message: 'No install hint' };
       return { ok: true, message: def.installHint, data: { installHint: def.installHint, officialDoc: def.officialDoc } };
+    }
+    case 'cli-login': {
+      const id: string | undefined = payload?.adapterId;
+      if (!id) return { ok: false, message: 'adapterId missing' };
+      const def = cliHub.registry?.get?.(id);
+      if (!def) return { ok: false, message: `Adapter not found: ${id}` };
+      const login = def.login ?? {};
+      const data = {
+        adapterId: id,
+        name: def.name,
+        url: login.url ?? null,
+        cmd: login.cmd ?? null,
+        note: login.note ?? null,
+        officialDoc: def.officialDoc ?? null,
+        installHint: def.installHint ?? null,
+      };
+      if (data.url || data.cmd || data.note) {
+        return { ok: true, message: login.note ?? (data.url ? `Opening ${def.name} login page…` : `Run: ${data.cmd}`), data };
+      }
+      // No automated login known — fall back to whatever guidance the adapter carries.
+      return {
+        ok: true,
+        message: def.installHint || `No automated login known for ${def.name}. See the docs link.`,
+        data,
+      };
     }
     case 'adapter-detail': {
       const id: string | undefined = payload?.adapterId;
@@ -1018,6 +1051,31 @@ function mountHttpPath(
       // ---- Dashboard HTML page: exact routes (must NOT be 'prefix', or /cli-hub would swallow /cli-hub/api/*) ----
       reg('exact', 'GET', '/cli-hub', async (req, res) => sendHtml(res, 200, DASHBOARD_HTML)),
       reg('exact', 'GET', '/plugins/cli-hub/page', async (req, res) => sendHtml(res, 200, DASHBOARD_HTML)),
+      // LLM bridge health: registration state + models currently offered to ctx.llm.
+      reg('prefix', 'GET', '/plugins/cli-hub/api/llm', async (req, res) => {
+        const bridge = (globalThis as any).__clihubLlmBridge ?? (cliHub as any)._llmBridge;
+        if (!bridge?.ok || typeof bridge.adapter?.listModels !== 'function') {
+          return send(res, 200, { registered: false, error: bridge?.error ?? 'bridge not mounted', dbg: (globalThis as any).__clihubDbg ?? [] });
+        }
+        try {
+          const models = await bridge.adapter.listModels(bridge.route);
+          send(res, 200, { registered: true, route: bridge.route, modelCount: models.length, models });
+        } catch (e: any) {
+          send(res, 200, { registered: true, route: bridge.route, listModelsError: String(e?.message ?? e), models: [] });
+        }
+      }),
+      reg('prefix', 'GET', '/cli-hub/api/llm', async (req, res) => {
+        const bridge = (globalThis as any).__clihubLlmBridge ?? (cliHub as any)._llmBridge;
+        if (!bridge?.ok || typeof bridge.adapter?.listModels !== 'function') {
+          return send(res, 200, { registered: false, error: bridge?.error ?? 'bridge not mounted', dbg: (globalThis as any).__clihubDbg ?? [] });
+        }
+        try {
+          const models = await bridge.adapter.listModels(bridge.route);
+          send(res, 200, { registered: true, route: bridge.route, modelCount: models.length, models });
+        } catch (e: any) {
+          send(res, 200, { registered: true, route: bridge.route, listModelsError: String(e?.message ?? e), models: [] });
+        }
+      }),
       reg('prefix', 'GET', '/plugins/cli-hub/api/dashboard', async (req, res) => send(res, 200, await views.getDashboard())),
       reg('prefix', 'GET', '/cli-hub/api/dashboard', async (req, res) => send(res, 200, await views.getDashboard())),
       // adapters list + detail merged into a single prefix route (avoids duplicate path errors):

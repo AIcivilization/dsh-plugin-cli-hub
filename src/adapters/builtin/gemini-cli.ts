@@ -15,6 +15,10 @@ export const geminiCliAdapter = defineCliAdapter({
   vendor: 'Google',
   officialDoc: 'https://github.com/google-gemini/gemini-cli',
   installHint: 'npm i -g @anthropic-ai/gemini-cli, then export GEMINI_API_KEY=...',
+  login: {
+    cmd: 'gemini',
+    note: 'First launch opens Google account OAuth in the browser; alternatively set GEMINI_API_KEY.',
+  },
 
   fingerprint: {
     commandNames: ['gemini', 'gemini-cli', 'gemini-cli-v2'],

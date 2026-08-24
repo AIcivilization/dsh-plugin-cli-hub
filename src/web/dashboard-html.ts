@@ -224,6 +224,25 @@ async function act(id, payload) {
 }
 
 /* ---------- rendering ---------- */
+/* Per-CLI login entry point: open the web login page when the adapter declares one,
+   otherwise show the terminal command / guidance in a dialog. */
+function showLoginDialog(d) {
+  var opened = false;
+  if (d.url) {
+    try { window.open(d.url, '_blank', 'noopener'); opened = true; } catch (e) {}
+  }
+  var lines = [];
+  if (d.note) lines.push(d.note);
+  if (d.cmd) lines.push('Run in a terminal:\n\n    ' + d.cmd);
+  if (!d.url && !d.cmd && !d.note) lines.push('No automated login known for this CLI.');
+  if (d.installHint) lines.push('Install: ' + d.installHint);
+  if (d.officialDoc) lines.push('Docs: ' + d.officialDoc);
+  lines.push('\nAfter logging in, click "Deep scan (L3)" to refresh the status here.');
+  $('#detailTitle').textContent = 'Log in · ' + (d.name || d.adapterId || '');
+  $('#detailBody').textContent = lines.join('\n\n');
+  document.getElementById('detail').showModal();
+}
+
 function emptyRow(cols, text) {
   return '<tr><td colspan="' + cols + '" class="empty">' + esc(text || 'No data') + '</td></tr>';
 }
@@ -414,6 +433,7 @@ document.addEventListener('click', async function (ev) {
     busy(btn, true);
     var r = await act(aid, payload);
     busy(btn, false);
+    if (r.ok && aid === 'cli-login') { showLoginDialog(r.data || {}); return; }
     if (r.ok) {
       if (aid === 'toggle-adapter' || aid === 'enable-all-authed' || aid === 'disable-all') {
         await Promise.all([loadAdapters(), loadTools(), loadDashboard()]);

@@ -15,6 +15,9 @@ export const ollamaAdapter = defineCliAdapter({
   vendor: 'Ollama',
   officialDoc: 'https://ollama.com',
   installHint: 'curl -fsSL https://ollama.com/install.sh | sh, then ollama pull llama3.1',
+  login: {
+    note: 'Local runtime — no login required. Just make sure the ollama service is running.',
+  },
 
   fingerprint: {
     commandNames: ['ollama', 'ollama-cli'],

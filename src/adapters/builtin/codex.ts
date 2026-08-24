@@ -15,6 +15,10 @@ export const codexAdapter = defineCliAdapter({
   vendor: 'OpenAI',
   officialDoc: 'https://github.com/openai/codex',
   installHint: 'npm i -g @openai/codex, then export OPENAI_API_KEY=sk-...',
+  login: {
+    cmd: 'codex login',
+    note: 'Opens the ChatGPT OAuth flow in your browser. Verify afterwards with: codex login status',
+  },
 
   fingerprint: {
     commandNames: ['codex', 'openai-codex', 'codex-cli', 'codex-code-mode-host'],
