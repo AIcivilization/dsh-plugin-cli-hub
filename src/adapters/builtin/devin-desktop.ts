@@ -21,6 +21,9 @@ export const devinDesktopAdapter = defineCliAdapter({
   fingerprint: {
     commandNames: ['devin-desktop', 'devin'],
     versionArgs: ['--version'],
+    // Its bin shim is a VS Code-style launcher: executing it (even with --version) opens the
+    // Devin desktop app on screen. Never exec-probe; auth falls back to envVars/configPaths.
+    probePolicy: 'skip',
     versionPattern: /devin(?:[-\s]desktop)?\s*v?([0-9][\w.+-]*)/i,
     configPaths: ['~/.codeium/windsurf', '~/Library/Application Support/Devin'],
     envVars: ['DEVIN_API_KEY', 'COGNITION_API_KEY', 'WINDSURF_TOKEN'],

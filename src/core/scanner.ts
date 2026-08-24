@@ -496,6 +496,9 @@ export class ScannerServiceImpl implements ScannerService {
     fp: CliFingerprint,
     timeout: number,
   ): Promise<string | null> {
+    // probePolicy 'skip': executing this binary has side effects (e.g. launcher shims that
+    // open a GUI app) — never run it; version stays unknown.
+    if (fp.probePolicy === 'skip') return null;
     const args = fp.versionArgs ?? ['--version'];
     const { stdout, exitCode } = await this._safeExec(executablePath, args, timeout);
     if (exitCode !== 0 && !stdout) return null;
@@ -537,7 +540,8 @@ export class ScannerServiceImpl implements ScannerService {
     }
 
     // c) authCheck command (strong evidence: prefer regex/exitCode results)
-    if (fp.authCheck) {
+    //    Suppressed under probePolicy 'skip' — running the command would execute the binary.
+    if (fp.authCheck && fp.probePolicy !== 'skip') {
       try {
         const parts = fp.authCheck.cmd.split(/\s+/);
         const actualCmd = parts.shift()!;

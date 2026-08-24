@@ -48,6 +48,12 @@ export type SandboxLevel = 'strict' | 'relaxed';
 // 2. CLI fingerprint (used by Scanner)
 // ============================================================
 export interface CliFingerprint {
+  /**
+   * 'skip' = never execute the discovered binary during scanning (L2 version probe and
+   * L3 authCheck command are both suppressed; auth falls back to envVars/configPaths only).
+   * Use for launcher-style shims whose execution opens a GUI app instead of printing output.
+   */
+  probePolicy?: 'auto' | 'skip';
   commandNames: string[];
   versionArgs?: string[];
   versionPattern?: RegExp;
@@ -213,6 +219,9 @@ export interface CliAdapterDefinition {
   vendor?: string;
   officialDoc?: string;
   installHint?: string;
+  /** How to log this CLI in. url = web page to open; cmd = terminal command to run manually;
+   *  note = free-form guidance. Omit when unknown — the UI falls back to officialDoc/installHint. */
+  login?: { url?: string; cmd?: string; note?: string };
   defaultEnabled?: boolean;
   fingerprint: CliFingerprint;
   capabilities: {
